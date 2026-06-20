@@ -2,13 +2,15 @@ import os
 import sys
 import tempfile
 import unittest
+from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _calibre_stub
 _calibre_stub.install()
 
 from calibre_plugins.highlights_to_obsidian.highlight_sender import (
-    format_data, BookData, BookList, HighlightSender, SafeDict)
+    format_data, make_highlight_format_dict, make_book_format_dict,
+    BookData, BookList, HighlightSender, SafeDict)
 
 
 def make_highlight(uuid="u1", timestamp="2022-09-10T20:32:08.820Z", text="hello",
@@ -53,6 +55,73 @@ class TestFormatDataNoNotesFallback(unittest.TestCase):
         out = format_data(SafeDict(title="A/B:C", notes="", highlight=""), "{title}", "b", "b")
         # "/" -> "-" (folder-safe), then ":" stripped as an illegal title char
         self.assertEqual(out[0], "A-BC")
+
+
+class TestChapterTitle(unittest.TestCase):
+    def dict_for(self, toc):
+        annot = {"highlighted_text": "x", "uuid": "u", "spine_index": 0, "start_cfi": "/2/2:0"}
+        if toc is not None:
+            annot["toc_family_titles"] = toc
+        return make_highlight_format_dict({"book_id": 1, "format": "EPUB", "annotation": annot}, "My Lib")
+
+    def test_uses_deepest_section(self):
+        d = self.dict_for(["Part I", "Chapter 1", "Section A"])
+        self.assertEqual(d["chaptertitle"], "Section A")
+
+    def test_single_level_toc(self):
+        self.assertEqual(self.dict_for(["Chapter 1"])["chaptertitle"], "Chapter 1")
+
+    def test_empty_when_missing_or_empty(self):
+        self.assertEqual(self.dict_for(None)["chaptertitle"], "")
+        self.assertEqual(self.dict_for([])["chaptertitle"], "")
+
+    def test_slashes_replaced(self):
+        self.assertEqual(self.dict_for(["Part", "1/2 Intro"])["chaptertitle"], "1-2 Intro")
+
+
+class TestHighlightFormatAndColor(unittest.TestCase):
+    def dict_for(self, style=None, fmt="EPUB"):
+        annot = {"highlighted_text": "x", "uuid": "u", "spine_index": 0, "start_cfi": "/2/2:0"}
+        if style is not None:
+            annot["style"] = style
+        return make_highlight_format_dict({"book_id": 1, "format": fmt, "annotation": annot}, "Lib")
+
+    def test_color(self):
+        d = self.dict_for({"kind": "color", "type": "builtin", "which": "yellow"})
+        self.assertEqual(d["color"], "yellow")
+
+    def test_format(self):
+        self.assertEqual(self.dict_for(fmt="PDF")["format"], "PDF")
+
+    def test_color_empty_when_no_style(self):
+        self.assertEqual(self.dict_for(None)["color"], "")
+
+
+class TestBookMetadata(unittest.TestCase):
+    def make(self, **meta):
+        base = {"title": "T", "authors": "A"}
+        base.update(meta)
+        return make_book_format_dict({"book_id": 1}, {1: base})
+
+    def test_identifiers_pubdate_tags(self):
+        d = self.make(identifiers={"isbn": "123", "lccn": "xy"},
+                      pubdate=datetime(2020, 5, 1), tags=("sci-fi", "classic"))
+        self.assertEqual(d["isbn"], "123")
+        self.assertEqual(d["lccn"], "xy")
+        self.assertEqual(d["pubdate"], "2020-05-01")
+        self.assertEqual(d["tags"], "sci-fi, classic")
+        self.assertIn("isbn:123", d["identifiers"])
+        self.assertEqual(d["calibreid"], 1)
+
+    def test_undefined_pubdate_is_empty(self):
+        self.assertEqual(self.make(pubdate=datetime(101, 1, 1))["pubdate"], "")
+
+    def test_missing_metadata_defaults_empty(self):
+        d = self.make()
+        self.assertEqual(d["isbn"], "")
+        self.assertEqual(d["tags"], "")
+        self.assertEqual(d["identifiers"], "")
+        self.assertEqual(d["pubdate"], "")
 
 
 class TestBookDataSplitting(unittest.TestCase):

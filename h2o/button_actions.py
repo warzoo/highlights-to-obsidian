@@ -57,7 +57,7 @@ def send_highlights(parent, db, condition=lambda x: True, update_send_time=True,
         _sender.set_body_format(prefs["body_format"])
         _sender.set_no_notes_format(prefs["no_notes_format"])
         _sender.set_header_format(prefs["header_format"] if prefs["use_header"] else "")
-        _sender.set_book_titles_authors(book_ids_to_titles_authors(db, restrict_to_book_ids))
+        _sender.set_book_titles_authors(book_ids_to_metadata(db, restrict_to_book_ids))
         _sender.set_sort_key(prefs["sort_key"])
         _sender.set_sleep_time(prefs["sleep_secs"])
         if prefs['use_max_note_size']:
@@ -220,11 +220,11 @@ def selected_book_ids(gui):
     return list(map(gui.library_view.model().id, rows))
 
 
-def book_ids_to_titles_authors(db, book_ids=None):
+def book_ids_to_metadata(db, book_ids=None):
     """
     :param db: calibre database: Cache().new_api
     :param book_ids: if given, only these book ids are looked up; otherwise the whole library.
-    :return: dictionary of {book_id: {"title": title, "authors": authors}}
+    :return: dictionary of {book_id: {"title", "authors", "identifiers", "pubdate", "tags"}}
     """
 
     def format_authors(authors) -> str:
@@ -242,7 +242,12 @@ def book_ids_to_titles_authors(db, book_ids=None):
     ids = db.all_book_ids() if book_ids is None else book_ids
 
     for book_id, title in db.all_field_for('title', ids).items():
-        authors = format_authors(db.field_for("authors", book_id))
-        ret[book_id] = {"title": title, "authors": authors}
+        ret[book_id] = {
+            "title": title,
+            "authors": format_authors(db.field_for("authors", book_id)),
+            "identifiers": db.field_for("identifiers", book_id),  # dict, e.g. {"isbn": "..."}
+            "pubdate": db.field_for("pubdate", book_id),  # datetime
+            "tags": db.field_for("tags", book_id),  # tuple of strings
+        }
 
     return ret

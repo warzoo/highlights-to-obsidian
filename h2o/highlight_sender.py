@@ -193,6 +193,16 @@ def make_highlight_format_dict(data: Dict, calibre_library: str) -> Dict[str, st
         "location": "/" + str((annot["spine_index"] + 1) * 2) + annot["start_cfi"],
     }
 
+    # calibre records the table-of-contents section titles the highlight falls under, ordered broad
+    # to narrow. use the most specific (last) one as the chapter title, with slashes removed so it's
+    # safe inside a note title/path (the same handling {title} gets).
+    toc_titles = annot.get("toc_family_titles") or []
+    chapter_title = (str(toc_titles[-1]) if toc_titles else "").replace("/", "-").replace("\\", "-")
+
+    # highlight style, e.g. {"kind": "color", "type": "builtin", "which": "yellow"}. "which" holds the
+    # color name for color highlights (or the decoration name, e.g. "wavy", for decoration highlights).
+    style = annot.get("style") or {}
+
     highlight_format = {
         "highlight": annot["highlighted_text"],  # highlighted text
         "blockquote": format_blockquote(annot["highlighted_text"]),  # block-quoted highlight
@@ -200,6 +210,9 @@ def make_highlight_format_dict(data: Dict, calibre_library: str) -> Dict[str, st
         "url": url_format.format(**url_args),  # calibre:// url to open ebook viewer to this highlight
         "location": url_args["location"],  # epub cfi location of this highlight
         "uuid": annot["uuid"],  # highlight's ID in calibre
+        "chaptertitle": chapter_title,  # most specific table-of-contents section title
+        "format": data.get("format", ""),  # the book format the highlight is in, e.g. EPUB
+        "color": style.get("which", ""),  # highlight color (or decoration style)
     }
 
     return highlight_format
@@ -212,13 +225,25 @@ def make_book_format_dict(data: Dict, book_titles_authors: Dict[int, Dict[str, s
     :param book_titles_authors: dictionary mapping book ids to {"title": title, "authors": authors}
     :return: dict containing all book-related formatting options
     """
-    title_authors = book_titles_authors.get(int(data["book_id"]), {})  # dict with {"title": str, "authors": Tuple[str]}
+    meta = book_titles_authors.get(int(data["book_id"]), {})
+
+    identifiers = meta.get("identifiers") or {}  # e.g. {"isbn": "...", "lccn": "..."}
+    ids_str = ", ".join(f"{k}:{v}" for k, v in identifiers.items())
+
+    # pubdate is a datetime; calibre uses the year 101 as its "undefined date" sentinel.
+    pubdate = meta.get("pubdate")
+    pubdate_str = pubdate.strftime("%Y-%m-%d") if pubdate is not None and pubdate.year > 101 else ""
 
     format_options = {
-        "title": title_authors.get("title", "Untitled"),  # title of book
-        # todo: add "chapter" option
-        "authors": title_authors.get("authors", ("Unknown",)),  # authors of book
+        "title": meta.get("title", "Untitled"),  # title of book
+        "authors": meta.get("authors", ("Unknown",)),  # authors of book
         "bookid": data["book_id"],
+        "calibreid": data["book_id"],  # same as bookid; calibre's internal book id
+        "isbn": identifiers.get("isbn", ""),
+        "lccn": identifiers.get("lccn", ""),
+        "identifiers": ids_str,  # all identifiers joined, e.g. "isbn:..., google:..."
+        "pubdate": pubdate_str,  # publication date as YYYY-MM-DD
+        "tags": ", ".join(meta.get("tags") or ()),  # book's tags, comma-separated
     }
 
     return format_options

@@ -39,6 +39,12 @@ After installing, go to Preferences -> Toolbars & menus -> The main toolbar. The
 - {title}: Title of the book the highlight is in.
 - {authors}: Authors of the book the highlight is in.
 - {bookid}: The book's ID in calibre. 
+- {calibreid}: The book's ID in calibre (same as {bookid}).
+- {isbn}: The book's ISBN identifier, if set.
+- {lccn}: The book's LCCN identifier, if set.
+- {identifiers}: All of the book's identifiers, joined together, e.g. "isbn:..., google:...".
+- {pubdate}: The book's publication date, formatted as YYYY-MM-DD.
+- {tags}: The book's tags, separated by commas.
 
 **Highlight Data:**
 - {highlight}: The highlighted text.
@@ -48,6 +54,9 @@ After installing, go to Preferences -> Toolbars & menus -> The main toolbar. The
 - {location}: The highlight's EPUB CFI location in the book. For example, "/2/8/6/5:192". As a sort key, this will order highlights by their position in the book.
 - {timestamp}: The highlight's Unix timestamp. As a sort key, this will order highlights by when they were made.
 - {uuid}: The highlight's unique ID in calibre. For example, "TlNlh8_I5VGKUtqdfbOxDw".
+- {chaptertitle}: The title of the chapter (table of contents section) the highlight is in. For example, "1.1 The Basic Pigeon-Hole Principle". If the book has nested sections, the most specific (deepest) one is used. Slashes are replaced with hyphens so it can be used in note titles. This lets you make a note per chapter, e.g. a title of "Books/{title}/{chaptertitle}".
+- {format}: The book format the highlight is in, e.g. EPUB.
+- {color}: The highlight's color, e.g. "yellow". For decoration-style highlights (underline, etc.) this is the decoration name instead.
 
 **Time Data:**
 - {date}: Date the highlight was made, formatted as YYYY-MM-DD.

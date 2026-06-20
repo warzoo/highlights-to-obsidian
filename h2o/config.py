@@ -202,7 +202,8 @@ class FormattingDialog(QDialog):
             "timezone", "utcoffset",
             "url", "location", "timestamp",
             "totalsent", "booksent", "highlightsent",
-            "bookid", "uuid",
+            "bookid", "uuid", "chaptertitle",
+            "calibreid", "isbn", "lccn", "identifiers", "pubdate", "tags", "format", "color",
         ]
         f_opt_str = "'" + "', '".join(format_options) + "'"
 
