@@ -1,13 +1,11 @@
 import os
-import subprocess
-import sys
 import time
 import webbrowser
 from typing import Dict, List, Callable, Any, Tuple, Iterable, Union
 from urllib.parse import urlencode, quote
 import datetime
 from calibre_plugins.highlights_to_obsidian.config import prefs
-from calibre_plugins.highlights_to_obsidian.utils import write_note_to_file
+from calibre_plugins.highlights_to_obsidian.utils import write_note_to_file, native_open
 
 # besides config.prefs (used only in HighlightSender.__init__) and the pure helpers in utils.py,
 # avoid importing anything from calibre or the rest of this plugin here. this keeps references to
@@ -26,24 +24,16 @@ def send_item_to_obsidian(obsidian_data: Dict[str, str]) -> None:
     uri = "obsidian://new?" + encoded_data
     try:
         if prefs['use_xdg_open']:
-            # this is to avoid a bug on linux, where the uri is opened in web browser instead of Obsidian
-            # https://docs.python.org/3/library/sys.html#sys.platform
-            if sys.platform.startswith('win32'):
-                raise NotImplementedError("Can't use xdg-open on Windows, see settings")
-            elif sys.platform.startswith('darwin'):
-                raise NotImplementedError("Can't use xdg-open on Mac, see settings")
-            else:
-                # probably a linux or unix os
-                os.system(f'xdg-open \"{uri}\"')
-                # using subprocess.run() doesn't seem to work
+            # open with the OS's native handler (os.startfile / open / xdg-open) instead of a web
+            # browser. "use_xdg_open" is the historical pref name; this now works on every OS.
+            native_open(uri)
         else:
-            # it might actually be better to do away with webbrowser.open() and only use os.system(). that might fix
-            #  the problem of needing to limit the max file size. would need to add support for each operating system.
             webbrowser.open(uri)
-    except ValueError as e:
+    except (ValueError, OSError) as e:
         raise ValueError(f" send_item_to_obsidian: '{e}' in note '{obsidian_data['file']}'.\n\n"
                          f"If this error says that the filepath is too long, try reducing the max file size in "
-                         f"the Highlights to Obsidian config (the path length that caused this error is {len(uri)}. "
+                         f"the Highlights to Obsidian config, or enable 'write highlights directly to vault files' "
+                         f"(the path length that caused this error is {len(uri)}. "
                          f"The path size will be larger than the max file size due to URL encoding).")
 
 

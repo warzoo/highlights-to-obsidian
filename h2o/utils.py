@@ -6,6 +6,8 @@ means the time-parsing, dedup, and file-writing logic lives in one place and can
 standalone, without a running calibre.
 """
 import os
+import subprocess
+import sys
 import time
 from typing import Dict, Tuple
 
@@ -74,3 +76,26 @@ def write_note_to_file(vault_path: str, note_file: str, note_content: str, appen
     with open(path, "a" if append else "w", encoding="utf-8") as f:
         f.write(note_content)
     return path
+
+
+def native_open(uri, platform=None, startfile=None, run=None) -> str:
+    """opens a uri with the OS's default handler using a native command instead of Python's
+    webbrowser: os.startfile on Windows, `open` on macOS, `xdg-open` on Linux/other.
+
+    This avoids opening a web browser and may allow longer uris (larger notes) on some systems --
+    though that isn't guaranteed; the reliable way to avoid the uri length limit is to write notes
+    directly to vault files.
+
+    startfile/run are injectable so this can be unit-tested without actually opening anything.
+
+    :return: a short string naming the method used ("startfile", "open", or "xdg-open").
+    """
+    platform = platform if platform is not None else sys.platform
+    if platform.startswith("win32"):
+        (startfile or os.startfile)(uri)
+        return "startfile"
+    if platform.startswith("darwin"):
+        (run or subprocess.run)(["open", uri])
+        return "open"
+    (run or subprocess.run)(["xdg-open", uri])
+    return "xdg-open"

@@ -10,7 +10,7 @@ _calibre_stub.install()
 
 from calibre_plugins.highlights_to_obsidian.utils import (
     parse_send_time, parse_highlight_time, annotation_user, is_unsent_or_edited,
-    note_path, write_note_to_file, SEND_TIME_FORMAT, CALIBRE_TIME_FORMAT)
+    note_path, write_note_to_file, native_open, SEND_TIME_FORMAT, CALIBRE_TIME_FORMAT)
 
 
 def read(path):
@@ -70,6 +70,30 @@ class TestFileWriting(unittest.TestCase):
             write_note_to_file(d, "Note", "first", append=True)
             path = write_note_to_file(d, "Note", "second", append=False)
             self.assertEqual(read(path), "second")
+
+
+class TestNativeOpen(unittest.TestCase):
+    def capture(self, platform):
+        calls = []
+        method = native_open("obsidian://new?x=1", platform=platform,
+                             startfile=lambda u: calls.append(("startfile", u)),
+                             run=lambda a: calls.append(("run", a)))
+        return method, calls
+
+    def test_windows_uses_startfile(self):
+        method, calls = self.capture("win32")
+        self.assertEqual(method, "startfile")
+        self.assertEqual(calls, [("startfile", "obsidian://new?x=1")])
+
+    def test_macos_uses_open(self):
+        method, calls = self.capture("darwin")
+        self.assertEqual(method, "open")
+        self.assertEqual(calls, [("run", ["open", "obsidian://new?x=1"])])
+
+    def test_linux_uses_xdg_open(self):
+        method, calls = self.capture("linux")
+        self.assertEqual(method, "xdg-open")
+        self.assertEqual(calls, [("run", ["xdg-open", "obsidian://new?x=1"])])
 
 
 if __name__ == "__main__":

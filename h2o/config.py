@@ -380,10 +380,12 @@ class OtherConfigDialog(QDialog):
         self.web_user_checkbox.setChecked(prefs['web_user'])
         self.l.addWidget(self.web_user_checkbox)
 
-        # checkbox for linux xdg-open
-        self.linux_xdg_checkbox = QCheckBox("Use Linux xdg-open command instead of Python webbrowser.open()")
-        self.linux_xdg_checkbox.setChecked(prefs['use_xdg_open'])
-        self.l.addWidget(self.linux_xdg_checkbox)
+        # checkbox for opening Obsidian with the OS's native command instead of Python's webbrowser
+        self.native_open_checkbox = QCheckBox(
+            "Open Obsidian with the OS's command (Windows/macOS/Linux) instead of Python's webbrowser "
+            "(may help if highlights open a web browser, or if large notes aren't sent)")
+        self.native_open_checkbox.setChecked(prefs['use_xdg_open'])
+        self.l.addWidget(self.native_open_checkbox)
 
         self.l.addSpacing(self.spacing)
 
@@ -412,7 +414,7 @@ class OtherConfigDialog(QDialog):
         username = self.web_user_name_input.text()
         prefs['web_user_name'] = "*" if username == "" else username
         prefs['web_user'] = self.web_user_checkbox.isChecked()
-        prefs['use_xdg_open'] = self.linux_xdg_checkbox.isChecked()
+        prefs['use_xdg_open'] = self.native_open_checkbox.isChecked()
 
         sleep_time = self.sleep_time_input.text()
         try:
