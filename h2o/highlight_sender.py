@@ -7,11 +7,12 @@ from typing import Dict, List, Callable, Any, Tuple, Iterable, Union
 from urllib.parse import urlencode, quote
 import datetime
 from calibre_plugins.highlights_to_obsidian.config import prefs
+from calibre_plugins.highlights_to_obsidian.utils import write_note_to_file
 
-# avoid importing anything else from calibre or the highlights_to_obsidian plugin here.
-# this is to avoid having references to the config or the calibre database scattered
-# throughout HighlightSender. those references are in HighlightSender.__init__() and
-# in make_sender() in button_actions.py.
+# besides config.prefs (used only in HighlightSender.__init__) and the pure helpers in utils.py,
+# avoid importing anything from calibre or the rest of this plugin here. this keeps references to
+# the config and the calibre database out of HighlightSender; those live in HighlightSender.__init__()
+# and in make_sender() in button_actions.py.
 
 
 def send_item_to_obsidian(obsidian_data: Dict[str, str]) -> None:
@@ -75,8 +76,15 @@ def format_data(dat: Dict[str, str], title: str, body: str, no_notes_body: str =
     # brackets, we don't want to replace the part in the highlight (it'll still be replaced if the highlight contains
     # a valid placeholder though).
     pre_format = title.replace("{title}", remove_slashes(dat["title"]))
+
+    # highlights that have notes use `body`. highlights without notes use `no_notes_body`, falling
+    # back to `body` when no_notes_body is empty -- this matches the config UI's promise that an empty
+    # no-notes format "defaults to the above". (the old logic returned an empty body in that case.)
+    has_notes = len(dat["notes"]) > 0
+    chosen_body = body if has_notes or not no_notes_body else no_notes_body
+
     return [remove_illegal_title_chars(pre_format.format_map(dat)),
-            body.format_map(dat) if no_notes_body and len(dat["notes"]) > 0 else no_notes_body.format_map(dat)]
+            chosen_body.format_map(dat)]
 
 
 def format_single(dat: Dict[str, str], item_format: str) -> str:
@@ -528,12 +536,25 @@ class HighlightSender:
         self.copy_header = False
         self.sort_key = prefs.defaults['sort_key']
         self.sleep_time = 0
+        self.vault_path = ""
+        self.write_to_file = False
+        # uuid -> highlight timestamp for the highlights sent by the most recent send() call
+        self.sent_highlights = {}
 
     def set_library(self, library_name: str):
         self.library_name = library_name
 
     def set_vault(self, vault_name: str):
         self.vault_name = vault_name
+
+    def set_vault_path(self, vault_path: str):
+        """filesystem path to the obsidian vault folder, used when write_to_file is enabled."""
+        self.vault_path = vault_path
+
+    def set_write_to_file(self, write_to_file: bool):
+        """if True, highlights are written directly to .md files in the vault folder instead of being
+        sent through the obsidian:// URI. this is more reliable and has no length limits."""
+        self.write_to_file = write_to_file
 
     def set_title_format(self, title_format: str):
         self.title_format = title_format
@@ -710,17 +731,33 @@ class HighlightSender:
 
         return formatted[0], (formatted[1], self.format_sort_key(dat)), header
 
+    def deliver(self, note_file: str, note_content: str) -> None:
+        """delivers a single note, either by writing it directly into the vault folder (reliable, no
+        length limits, doesn't need Obsidian open) or via the obsidian:// URI."""
+        if self.write_to_file:
+            write_note_to_file(self.vault_path, note_file, note_content, append=True)
+        else:
+            send_item_to_obsidian(self.make_obsidian_data(note_file, note_content))
+
     def send(self, condition: Callable[[Any], bool] = lambda x: True):
         """
         condition takes a highlight's json object and returns true if that highlight should be sent to obsidian.
         """
+        if self.write_to_file and not os.path.isdir(self.vault_path):
+            raise RuntimeError(
+                f"Can't write highlights to files: the vault folder '{self.vault_path}' doesn't exist. "
+                f"Set a valid vault folder path in the Highlights to Obsidian config, or turn off "
+                f"'write highlights directly to vault files'.")
 
         highlights = filter(lambda x: self.is_valid_highlight(x, condition), self.annotations_list)
-        headers = []  # formatted headers: dict[note_title:str, header:str]
+        headers = []  # titles that already have a header
         books = BookList()
+        self.sent_highlights = {}  # uuid -> timestamp of highlights actually sent this call
 
         # make formatted titles, bodies, and headers
         for highlight in highlights:
+            annot = highlight["annotation"]
+            self.sent_highlights[annot["uuid"]] = annot["timestamp"]
             h = self.process_highlight(highlight, headers)
             books.add_note(h[0], h[1][0], h[1][1])
             if h[2] is not None:
@@ -728,10 +765,12 @@ class HighlightSender:
 
         books.apply_sent_amount_format(self.should_apply_sent_formats())
 
-        # todo: sometimes, if obsidian isn't already open, not all highlights get sent. probably need to send a single
-        #  item then wait for obsidian to open
-        for note in books.make_sendable_notes(self.max_file_size, self.copy_header):
-            send_item_to_obsidian(self.make_obsidian_data(note[0], note[1]))
-            time.sleep(self.sleep_time)
+        # when writing files directly there's no URI length limit, so notes don't need to be split.
+        max_size = -1 if self.write_to_file else self.max_file_size
+        for note in books.make_sendable_notes(max_size, self.copy_header):
+            self.deliver(note[0], note[1])
+            if not self.write_to_file:
+                # give obsidian a moment between URIs; sometimes not all are received otherwise.
+                time.sleep(self.sleep_time)
 
         return sum([len(b) for b in books.values()])

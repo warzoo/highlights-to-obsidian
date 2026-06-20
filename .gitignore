@@ -1,6 +1,9 @@
 # calibre's exported annotations file
 *.calibre_annotation_collection
 
+# Claude Code session/local files
+.claude/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

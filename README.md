@@ -22,6 +22,10 @@ After installing, go to Preferences -> Toolbars & menus -> The main toolbar. The
 
 - Sometimes, if you send highlights while your Obsidian vault is closed, not all highlights will be sent. If this happens, you can use the "Resend Previously Sent Highlights" function.
 
+- For more reliable sending, you can have H2O write highlights directly to your vault's files instead of using the `obsidian://` URI. Set your vault's folder path and enable "Write highlights directly to vault files" in the config's Other Options. This avoids lost highlights, doesn't require Obsidian to be open, and has no note length limit.
+
+- Highlights are tracked by their unique ID, so sending the same highlight twice won't create duplicates, and a highlight you edit in calibre will be re-sent the next time you send new highlights.
+
 - You can set keyboard shortcuts in Preferences -> Shortcuts -> H2O.
 
 - Due to URI length limits, H2O can only send a few thousand words to a single note at once. Extra text will be sent to different notes with increasing numbers added to the end of the title. This can be changed in the config.

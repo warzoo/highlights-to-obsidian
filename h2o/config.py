@@ -4,6 +4,7 @@ from qt.core import (QWidget, QVBoxLayout, QLabel, QLineEdit, QPlainTextEdit,
                      QPushButton, QDialog, QDialogButtonBox, QCheckBox)
 from calibre.gui2 import warning_dialog
 from calibre.utils.config import JSONConfig
+from calibre_plugins.highlights_to_obsidian.utils import parse_send_time, SEND_TIME_FORMAT
 from calibre_plugins.highlights_to_obsidian.__init__ import version
 
 # This is where all preferences for this plugin will be stored
@@ -36,8 +37,10 @@ prefs.defaults['header_format'] = header_default_format
 prefs.defaults['use_header'] = False  # empty string is equal to false
 prefs.defaults['sort_key'] = sort_key_default
 
-prefs.defaults['last_send_time'] = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(172800))
-prefs.defaults['prev_send'] = None  # the send time before last_send_time
+prefs.defaults['last_send_time'] = time.strftime(SEND_TIME_FORMAT, time.gmtime(172800))
+prefs.defaults['prev_send'] = None  # deprecated; kept so old configs don't error
+prefs.defaults['sent_highlights'] = {}  # {highlight uuid: timestamp} of highlights already sent
+prefs.defaults['last_batch_uuids'] = []  # uuids sent in the most recent "send new" batch (for resend)
 prefs.defaults['display_help_on_menu_open'] = True
 prefs.defaults['confirm_send_all'] = True  # confirmation dialog when sending all highlights
 prefs.defaults['highlights_sent_dialog'] = True  # show popup with how many highlights were sent
@@ -48,6 +51,8 @@ prefs.defaults['web_user_name'] = "*"
 prefs.defaults['web_user'] = False  # whether we should send web user or local user's highlights
 prefs.defaults['use_xdg_open'] = False
 prefs.defaults['sleep_secs'] = 0.1
+prefs.defaults['write_to_file'] = False  # write directly to vault files instead of using the obsidian:// URI
+prefs.defaults['vault_path'] = ""  # filesystem path to the obsidian vault, required when write_to_file is True
 
 
 
@@ -179,7 +184,7 @@ class FormattingDialog(QDialog):
 
         # ok and cancel buttons
         self.buttons = QDialogButtonBox()
-        self.buttons.setStandardButtons(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttons.setStandardButtons(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         self.buttons.accepted.connect(self.ok_button)
         self.buttons.rejected.connect(self.cancel_button)
         self.l.addWidget(self.buttons)
@@ -265,6 +270,23 @@ class OtherConfigDialog(QDialog):
         self.vault_input.setPlaceholderText("Obsidian vault name...")
         self.l.addWidget(self.vault_input)
         self.vault_label.setBuddy(self.vault_input)
+
+        self.l.addSpacing(self.spacing)
+
+        # output method: write files directly vs. obsidian:// URI
+        self.write_to_file_checkbox = QCheckBox(
+            "Write highlights directly to vault files (more reliable: doesn't need Obsidian open, "
+            "no URI length limit, ignores max note size)")
+        self.write_to_file_checkbox.setChecked(prefs['write_to_file'])
+        self.l.addWidget(self.write_to_file_checkbox)
+
+        self.vault_path_label = QLabel("<b>Vault folder path</b> (required when writing directly to files):", self)
+        self.l.addWidget(self.vault_path_label)
+        self.vault_path_input = QLineEdit(self)
+        self.vault_path_input.setText(prefs['vault_path'])
+        self.vault_path_input.setPlaceholderText("e.g. C:/Users/you/Documents/My Vault")
+        self.l.addWidget(self.vault_path_input)
+        self.vault_path_label.setBuddy(self.vault_path_input)
 
         self.l.addSpacing(self.spacing)
 
@@ -366,17 +388,19 @@ class OtherConfigDialog(QDialog):
 
         # ok and cancel buttons
         self.buttons = QDialogButtonBox()
-        self.buttons.setStandardButtons(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttons.setStandardButtons(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         self.buttons.accepted.connect(self.ok_button)
         self.buttons.rejected.connect(self.cancel_button)
         self.l.addWidget(self.buttons)
 
     def set_time_now(self):
-        prefs["last_send_time"] = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
+        prefs["last_send_time"] = time.strftime(SEND_TIME_FORMAT, time.gmtime())
         self.time_input.setText(prefs['last_send_time'])
 
     def save_settings(self):
         prefs['vault_name'] = self.vault_input.text()
+        prefs['write_to_file'] = self.write_to_file_checkbox.isChecked()
+        prefs['vault_path'] = self.vault_path_input.text()
         prefs['sort_key'] = self.sort_input.text()
         max_size = self.max_size_input.text()
         prefs['max_note_size'] = max_size if max_size.isnumeric() else prefs['max_note_size']
@@ -400,9 +424,7 @@ class OtherConfigDialog(QDialog):
         # validate time input
         send_time = self.time_input.text()
         try:
-            # todo: move all the scattered calls to mktime(strptime()) to a single place, so i don't have to keep
-            #  copying and pasting the format
-            time.mktime(time.strptime(send_time, "%Y-%m-%d %H:%M:%S"))
+            parse_send_time(send_time)
             prefs['last_send_time'] = send_time
         except:
             txt = f'Could not parse time "{send_time}". Either it is formatted improperly or the year is too high' + \
