@@ -289,6 +289,19 @@ def make_format_dict(data, calibre_library: str, book_titles_authors: Dict[int, 
     return SafeDict(**time_options, **highlight_options, **book_options, **placeholders)
 
 
+def all_format_keys():
+    """returns the set of placeholder names available for formatting, which are also the valid sort keys.
+
+    built from a sample highlight so the set stays in sync automatically as formatting options are added,
+    rather than maintaining a separate hardcoded list. used to validate the configured sort key.
+    """
+    # 2020 (not the epoch) keeps make_time_format_dict away from pre-epoch dates that break on Windows.
+    sample = {"book_id": 0, "format": "", "annotation": {
+        "timestamp": "2020-01-01T00:00:00.000Z", "highlighted_text": "", "uuid": "",
+        "spine_index": 0, "start_cfi": "/2/2:0", "style": {}, "notes": ""}}
+    return set(make_format_dict(sample, "", {}))
+
+
 class SafeDict(dict):
     def __init__(self, **kwargs):
         """if a key is not found in this dict, will return the key with {curly brackets}.
@@ -636,9 +649,12 @@ class HighlightSender:
         """
         :param sort_key: key to use for sorting highlights. should be one of the formatting options, e.g. "timestamp",
         "location", "highlight", etc
+
+        leading/trailing whitespace is stripped and the key is lowercased, so the sort still works even
+        if the config value has a stray space or wrong capitalization (which would otherwise silently
+        disable sorting). this also fixes already-saved configs without the user having to re-save.
         """
-        # todo: verify that the sort key is valid
-        self.sort_key = sort_key
+        self.sort_key = (sort_key or "").strip().lower()
 
     def set_sleep_time(self, sleep_time: float):
         """

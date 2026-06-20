@@ -10,7 +10,7 @@ _calibre_stub.install()
 
 from calibre_plugins.highlights_to_obsidian.highlight_sender import (
     format_data, format_single, make_highlight_format_dict, make_book_format_dict,
-    BookData, BookList, HighlightSender, SafeDict)
+    all_format_keys, BookData, BookList, HighlightSender, SafeDict)
 
 
 def make_highlight(uuid="u1", timestamp="2022-09-10T20:32:08.820Z", text="hello",
@@ -212,6 +212,20 @@ class TestSortKey(unittest.TestCase):
         hs = HighlightSender()
         hs.set_sort_key("timestamp")
         self.assertEqual(hs.format_sort_key({"timestamp": "x"}), "x")
+
+    def test_sort_key_stripped_and_lowercased(self):
+        # a stray space or wrong case used to silently disable location sorting
+        hs = HighlightSender()
+        hs.set_sort_key("  Location  ")
+        self.assertEqual(hs.sort_key, "location")
+        self.assertEqual(hs.format_sort_key({"location": "/8/4/2:0"}), (8, 4, 0, 0, 0, 0, 0, 0, 2, 0))
+
+
+class TestAllFormatKeys(unittest.TestCase):
+    def test_includes_known_placeholders(self):
+        keys = all_format_keys()
+        for k in ("location", "timestamp", "title", "color", "chaptertitle", "tags", "colorlabel"):
+            self.assertIn(k, keys)
 
 
 class TestSendToFile(unittest.TestCase):

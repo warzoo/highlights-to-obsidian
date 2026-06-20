@@ -438,8 +438,23 @@ class OtherConfigDialog(QDialog):
         prefs['vault_name'] = self.vault_input.text()
         prefs['write_to_file'] = self.write_to_file_checkbox.isChecked()
         prefs['vault_path'] = self.vault_path_input.text()
-        prefs['sort_key'] = self.sort_input.text()
         prefs['color_filter'] = self.color_filter_input.text()
+
+        # strip the sort key (a stray space silently disables sorting), and warn if it isn't a real
+        # formatting option -- a common reason "sort by location" appears to do nothing.
+        sort_key = self.sort_input.text().strip()
+        prefs['sort_key'] = sort_key
+        if sort_key:
+            try:
+                from calibre_plugins.highlights_to_obsidian.highlight_sender import all_format_keys
+                valid_keys = all_format_keys()
+            except Exception:
+                valid_keys = None
+            if valid_keys is not None and sort_key.lower() not in valid_keys:
+                warning_dialog(self, "Unknown sort key",
+                               f'"{sort_key}" is not one of the formatting options, so highlights won\'t be '
+                               f'sorted by it. Use an option from Formatting Options without brackets, '
+                               f'e.g. "location" or "timestamp".', show=True)
         max_size = self.max_size_input.text()
         prefs['max_note_size'] = max_size if max_size.isnumeric() else prefs['max_note_size']
         prefs['use_max_note_size'] = self.use_max_size_checkbox.isChecked()
