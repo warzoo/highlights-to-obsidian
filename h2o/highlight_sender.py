@@ -5,7 +5,8 @@ from typing import Dict, List, Callable, Any, Tuple, Iterable, Union
 from urllib.parse import urlencode, quote
 import datetime
 from calibre_plugins.highlights_to_obsidian.config import prefs
-from calibre_plugins.highlights_to_obsidian.utils import write_note_to_file, native_open, format_with
+from calibre_plugins.highlights_to_obsidian.utils import (write_note_to_file, native_open, format_with,
+                                                          make_block, merge_note, read_note_file)
 
 # besides config.prefs (used only in HighlightSender.__init__) and the pure helpers in utils.py,
 # avoid importing anything from calibre or the rest of this plugin here. this keeps references to
@@ -587,6 +588,7 @@ class HighlightSender:
         self.write_to_file = False
         self.color_labels = {}  # {color: label} for the {colorlabel} option
         self.color_filter = []  # lowercased color names; if non-empty, only these colors are sent
+        self.merge_notes = False  # insert highlights in sorted position, preserving edits (file mode)
         # uuid -> highlight timestamp for the highlights sent by the most recent send() call
         self.sent_highlights = {}
 
@@ -613,6 +615,12 @@ class HighlightSender:
         """:param color_filter: list of lowercased color names. if non-empty, only highlights whose
         color is in the list are sent."""
         self.color_filter = color_filter or []
+
+    def set_merge_notes(self, merge_notes: bool):
+        """if True (and writing directly to files), each highlight is inserted into its note in sorted
+        position, updating existing highlights in place and preserving the user's manual edits, instead
+        of being appended at the bottom. has no effect unless write_to_file is also enabled."""
+        self.merge_notes = merge_notes
 
     def set_title_format(self, title_format: str):
         self.title_format = title_format
@@ -848,6 +856,33 @@ class HighlightSender:
                 time.sleep(self.sleep_time)
         return count
 
+    def _send_merge(self, highlights) -> int:
+        """file-write merge mode (issue #13): write each highlight as a marked block, inserting it into
+        its book's note in sorted position and preserving the note's existing content and edits.
+
+        the {totalsent}/{booksent}/{highlightsent} placeholders aren't applied in this mode."""
+        self.sent_highlights = {}
+        notes = {}  # title -> {"header": str, "blocks": [block, ...]}
+
+        for highlight in highlights:
+            annot = highlight["annotation"]
+            self.sent_highlights[annot["uuid"]] = annot["timestamp"]
+            dat = make_format_dict(highlight, self.library_name, self.book_titles_authors, self.color_labels)
+            title, body = format_data(dat, self.title_format, self.body_format, self.no_notes_format)
+            block = make_block(annot["uuid"], self.format_sort_key(dat), body)
+            if title not in notes:
+                header = format_single(dat, self.header_format) if self.header_format else ""
+                notes[title] = {"header": header, "blocks": []}
+            notes[title]["blocks"].append(block)
+
+        count = 0
+        for title, data in notes.items():
+            existing = read_note_file(self.vault_path, title)
+            merged = merge_note(existing, data["header"], data["blocks"])
+            write_note_to_file(self.vault_path, title, merged, append=False)
+            count += len(data["blocks"])
+        return count
+
     def send(self, condition: Callable[[Any], bool] = lambda x: True):
         """
         condition takes a highlight's json object and returns true if that highlight should be sent to obsidian.
@@ -859,6 +894,10 @@ class HighlightSender:
                 f"'write highlights directly to vault files'.")
 
         highlights = filter(lambda x: self.is_valid_highlight(x, condition), self.annotations_list)
+
+        if self.write_to_file and self.merge_notes:
+            return self._send_merge(highlights)
+
         headers = []  # titles that already have a header
         books = BookList()
         self.sent_highlights = {}  # uuid -> timestamp of highlights actually sent this call

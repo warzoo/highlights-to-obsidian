@@ -6,6 +6,7 @@ means the time-parsing, dedup, and file-writing logic lives in one place and can
 standalone, without a running calibre.
 """
 import os
+import re
 import string
 import subprocess
 import sys
@@ -156,3 +157,83 @@ def native_open(uri, platform=None, startfile=None, run=None) -> str:
         return "open"
     (run or subprocess.run)(["xdg-open", uri])
     return "xdg-open"
+
+
+# ---- insert-in-order merge mode (issue #13) ----
+# each highlight written to a note is prefixed with a hidden marker that records its position so new
+# highlights can be inserted in the right place later, without disturbing the user's manual edits.
+# %%...%% is Obsidian's comment syntax: hidden in reading view, and unlike HTML comments it has no
+# "--" restriction.
+MARKER_RE = re.compile(r'%%h2o uuid="([^"]*)" sort="([^"]*)"%%')
+
+
+def encode_sort_value(value) -> str:
+    """encodes a sort key into a string that compares in the same order, stays small, and is safe
+    inside an h2o marker. tuples of ints (e.g. the location sort key) become fixed-width zero-padded
+    digits so lexicographic order matches numeric order; other values become a sanitized string."""
+    if isinstance(value, tuple):
+        return "".join(f"{int(n):010d}" for n in value)
+    return str(value).replace('"', "").replace("%", "")[:200]
+
+
+def make_block(uuid: str, sort_value, body: str) -> Dict[str, str]:
+    """builds a note block for one highlight: a hidden marker line (recording uuid + encoded sort
+    position) followed by the formatted body. returns {uuid, sort, text}."""
+    sort = encode_sort_value(sort_value)
+    text = f'%%h2o uuid="{uuid}" sort="{sort}"%%\n{body}'
+    if not text.endswith("\n"):
+        text += "\n"
+    return {"uuid": uuid, "sort": sort, "text": text}
+
+
+def parse_note(text: str):
+    """splits an existing note into (preamble, blocks).
+
+    blocks is a list of {uuid, sort, text} where text is the full block (its marker line through just
+    before the next marker, or the end). preamble is everything before the first h2o marker (e.g. the
+    header and any content the user added above the highlights); it is preserved untouched.
+    """
+    matches = list(MARKER_RE.finditer(text))
+    if not matches:
+        return text, []
+    preamble = text[:matches[0].start()]
+    blocks = []
+    for i, m in enumerate(matches):
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        blocks.append({"uuid": m.group(1), "sort": m.group(2), "text": text[m.start():end]})
+    return preamble, blocks
+
+
+def merge_note(existing_text: str, header: str, new_blocks) -> str:
+    """merges new_blocks into an existing note, keeping all h2o blocks sorted by their recorded sort
+    value while preserving the preamble and each block's content (including the user's manual edits).
+
+    dedup/update is by uuid: a new block replaces an existing one with the same uuid (so edited
+    highlights are updated in place). new uuids are inserted in sorted position.
+    """
+    if existing_text:
+        preamble, blocks = parse_note(existing_text)
+    else:
+        preamble, blocks = header, []
+
+    by_uuid = {b["uuid"]: b for b in blocks}
+    for nb in new_blocks:
+        by_uuid[nb["uuid"]] = nb  # add new, or update an edited highlight in place
+
+    merged = sorted(by_uuid.values(), key=lambda b: b["sort"])  # sorted() is stable
+    if not merged:
+        return preamble
+
+    if preamble and not preamble.endswith("\n"):
+        preamble += "\n"
+    body = "".join(b["text"] if b["text"].endswith("\n") else b["text"] + "\n" for b in merged)
+    return preamble + body
+
+
+def read_note_file(vault_path: str, note_file: str) -> str:
+    """returns the current content of the note's .md file inside the vault, or '' if it doesn't exist."""
+    path = note_path(vault_path, note_file)
+    if not os.path.isfile(path):
+        return ""
+    with open(path, encoding="utf-8") as f:
+        return f.read()

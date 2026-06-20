@@ -53,6 +53,7 @@ prefs.defaults['use_xdg_open'] = False
 prefs.defaults['sleep_secs'] = 0.1
 prefs.defaults['write_to_file'] = False  # write directly to vault files instead of using the obsidian:// URI
 prefs.defaults['vault_path'] = ""  # filesystem path to the obsidian vault, required when write_to_file is True
+prefs.defaults['merge_notes'] = False  # insert highlights in sorted position, preserving edits (file mode)
 prefs.defaults['color_labels'] = ""  # newline-separated "color = label" mappings for {colorlabel}
 prefs.defaults['color_filter'] = ""  # comma-separated colors to send; empty = send all colors
 prefs.defaults['use_custom_column'] = False  # read annotations from a custom column instead of calibre's own
@@ -311,6 +312,12 @@ class OtherConfigDialog(QDialog):
         self.l.addWidget(self.vault_path_input)
         self.vault_path_label.setBuddy(self.vault_path_input)
 
+        self.merge_notes_checkbox = QCheckBox(
+            "Keep notes sorted and preserve your edits: insert new highlights in position instead of "
+            "appending (only when writing to files; adds small hidden %%h2o%% markers to track position)")
+        self.merge_notes_checkbox.setChecked(prefs['merge_notes'])
+        self.l.addWidget(self.merge_notes_checkbox)
+
         self.l.addSpacing(self.spacing)
 
         # sort key
@@ -458,6 +465,7 @@ class OtherConfigDialog(QDialog):
         prefs['vault_name'] = self.vault_input.text()
         prefs['write_to_file'] = self.write_to_file_checkbox.isChecked()
         prefs['vault_path'] = self.vault_path_input.text()
+        prefs['merge_notes'] = self.merge_notes_checkbox.isChecked()
         prefs['color_filter'] = self.color_filter_input.text()
 
         # strip the sort key (a stray space silently disables sorting), and warn if it isn't a real

@@ -26,6 +26,8 @@ After installing, go to Preferences -> Toolbars & menus -> The main toolbar. The
 
 - Highlights are tracked by their unique ID, so sending the same highlight twice won't create duplicates, and a highlight you edit in calibre will be re-sent the next time you send new highlights.
 
+- When writing directly to vault files, you can enable "Keep notes sorted and preserve your edits". With this on, each new highlight is inserted into its note at the correct sorted position (per your sort key) instead of being appended at the bottom, and any edits you've made to the note are kept. This works by adding a small hidden `%%h2o%%` marker before each highlight to track its position; the markers are invisible in Obsidian's reading view. The {totalsent}, {booksent}, and {highlightsent} placeholders aren't applied in this mode.
+
 - You can restrict sending to specific highlight colors with the "Only send these highlight colors" option in the config's Other Options. Leave it empty to send all colors.
 
 - Instead of calibre's built-in annotations, you can have H2O read annotations from a custom column (for example, a column populated by the [Annotations](https://github.com/davidfor/calibre-annotations) plugin). Enable "Read annotations from a custom column" in the config's Other Options and enter the column's lookup name (e.g. `#annotations`). H2O then sends each book's column content as the note body (one note per book, overwritten on each send). Per-highlight options like {blockquote}, {color}, {location}, and sorting don't apply in this mode, since the column holds rendered text rather than calibre's structured highlight data.

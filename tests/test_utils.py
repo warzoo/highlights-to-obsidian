@@ -11,7 +11,8 @@ _calibre_stub.install()
 from calibre_plugins.highlights_to_obsidian.utils import (
     parse_send_time, parse_highlight_time, annotation_user, is_unsent_or_edited,
     note_path, write_note_to_file, native_open, parse_color_labels, parse_color_filter,
-    yaml_safe, format_with, SEND_TIME_FORMAT, CALIBRE_TIME_FORMAT)
+    yaml_safe, format_with, encode_sort_value, make_block, parse_note, merge_note, read_note_file,
+    SEND_TIME_FORMAT, CALIBRE_TIME_FORMAT)
 
 
 def read(path):
@@ -112,6 +113,55 @@ class TestColorFilterParsing(unittest.TestCase):
     def test_empty_means_all(self):
         self.assertEqual(parse_color_filter(""), [])
         self.assertEqual(parse_color_filter("  ,  "), [])
+
+
+class TestMergeMode(unittest.TestCase):
+    def test_encode_sort_value_tuple_orders_numerically(self):
+        self.assertLess(encode_sort_value((8,)), encode_sort_value((10,)))
+        self.assertEqual(encode_sort_value((8, 2)), "00000000080000000002")
+
+    def test_make_block_has_marker_and_body(self):
+        b = make_block("u1", (5,), "hello\n")
+        self.assertIn('%%h2o uuid="u1"', b["text"])
+        self.assertIn("hello", b["text"])
+        self.assertTrue(b["text"].endswith("\n"))
+
+    def test_parse_note_no_markers(self):
+        self.assertEqual(parse_note("just text"), ("just text", []))
+
+    def test_parse_note_with_markers(self):
+        text = "HEADER\n" + make_block("u1", (1,), "one\n")["text"] + make_block("u2", (2,), "two\n")["text"]
+        pre, blocks = parse_note(text)
+        self.assertEqual(pre, "HEADER\n")
+        self.assertEqual([b["uuid"] for b in blocks], ["u1", "u2"])
+
+    def test_merge_inserts_in_sorted_position(self):
+        existing = "HEADER\n" + make_block("u1", (1,), "one\n")["text"] + make_block("u3", (3,), "three\n")["text"]
+        merged = merge_note(existing, "HEADER\n", [make_block("u2", (2,), "two\n")])
+        self.assertTrue(merged.startswith("HEADER\n"))
+        self.assertLess(merged.index("one"), merged.index("two"))
+        self.assertLess(merged.index("two"), merged.index("three"))
+
+    def test_merge_updates_existing_uuid(self):
+        existing = make_block("u1", (1,), "old text\n")["text"]
+        merged = merge_note(existing, "", [make_block("u1", (1,), "new text\n")])
+        self.assertIn("new text", merged)
+        self.assertNotIn("old text", merged)
+
+    def test_merge_preserves_manual_edit_in_block(self):
+        existing = make_block("u1", (1,), "one\n")["text"] + "MY MANUAL NOTE\n"
+        merged = merge_note(existing, "", [make_block("u2", (2,), "two\n")])
+        self.assertIn("MY MANUAL NOTE", merged)
+        self.assertLess(merged.index("MY MANUAL NOTE"), merged.index("two"))
+
+    def test_merge_empty_existing_uses_header(self):
+        merged = merge_note("", "HEADER\n", [make_block("u1", (1,), "one\n")])
+        self.assertTrue(merged.startswith("HEADER\n"))
+        self.assertIn("one", merged)
+
+    def test_read_note_file_missing_returns_empty(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(read_note_file(d, "nope"), "")
 
 
 class TestNativeOpen(unittest.TestCase):

@@ -261,6 +261,65 @@ class TestSendToFile(unittest.TestCase):
             s.send()
 
 
+class TestMergeSend(unittest.TestCase):
+    def hl(self, uuid, text, spine, cfi):
+        return {"book_id": 1, "format": "EPUB", "annotation": {
+            "type": "highlight", "timestamp": "2022-01-01T00:00:00.000Z",
+            "highlighted_text": text, "uuid": uuid, "spine_index": spine, "start_cfi": cfi}}
+
+    def sender(self, vault):
+        s = HighlightSender()
+        s.set_title_format("Book")
+        s.set_body_format("{highlight}\n")
+        s.set_no_notes_format("{highlight}\n")
+        s.set_header_format("")
+        s.set_book_titles_authors({1: {"title": "Book", "authors": "A"}})
+        s.set_sort_key("location")
+        s.set_write_to_file(True)
+        s.set_vault_path(vault)
+        s.set_merge_notes(True)
+        return s
+
+    def read(self, d):
+        with open(os.path.join(d, "Book.md"), encoding="utf-8") as f:
+            return f.read()
+
+    def test_new_highlight_inserted_in_sorted_position(self):
+        with tempfile.TemporaryDirectory() as d:
+            s = self.sender(d)
+            s.set_annotations_list([self.hl("u_late", "LATE", 3, "/2/4/84/1:0"),
+                                    self.hl("u_early", "EARLY", 0, "/2/4/2/1:0")])
+            s.send()
+            s.set_annotations_list([self.hl("u_mid", "MIDDLE", 1, "/2/4/10/1:0")])
+            s.send()
+            content = self.read(d)
+            self.assertLess(content.index("EARLY"), content.index("MIDDLE"))
+            self.assertLess(content.index("MIDDLE"), content.index("LATE"))
+
+    def test_manual_edit_preserved_on_resend(self):
+        with tempfile.TemporaryDirectory() as d:
+            s = self.sender(d)
+            s.set_annotations_list([self.hl("u1", "FIRST", 0, "/2/4/2/1:0")])
+            s.send()
+            path = os.path.join(d, "Book.md")
+            with open(path, "a", encoding="utf-8") as f:
+                f.write("MY MANUAL EDIT\n")
+            s.set_annotations_list([self.hl("u2", "SECOND", 1, "/2/4/10/1:0")])
+            s.send()
+            content = self.read(d)
+            for expected in ("FIRST", "SECOND", "MY MANUAL EDIT"):
+                self.assertIn(expected, content)
+
+    def test_resend_same_highlight_does_not_duplicate(self):
+        with tempfile.TemporaryDirectory() as d:
+            s = self.sender(d)
+            anns = [self.hl("u1", "ONLY", 0, "/2/4/2/1:0")]
+            s.set_annotations_list(anns)
+            s.send()
+            s.send()
+            self.assertEqual(self.read(d).count("ONLY"), 1)
+
+
 class TestSendColumns(unittest.TestCase):
     def build_sender(self, vault_path):
         s = HighlightSender()
