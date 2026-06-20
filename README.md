@@ -26,6 +26,8 @@ After installing, go to Preferences -> Toolbars & menus -> The main toolbar. The
 
 - Highlights are tracked by their unique ID, so sending the same highlight twice won't create duplicates, and a highlight you edit in calibre will be re-sent the next time you send new highlights.
 
+- You can restrict sending to specific highlight colors with the "Only send these highlight colors" option in the config's Other Options. Leave it empty to send all colors.
+
 - You can set keyboard shortcuts in Preferences -> Shortcuts -> H2O.
 
 - Due to URI length limits, H2O can only send a few thousand words to a single note at once. Extra text will be sent to different notes with increasing numbers added to the end of the title. This can be changed in the config.
@@ -57,6 +59,7 @@ After installing, go to Preferences -> Toolbars & menus -> The main toolbar. The
 - {chaptertitle}: The title of the chapter (table of contents section) the highlight is in. For example, "1.1 The Basic Pigeon-Hole Principle". If the book has nested sections, the most specific (deepest) one is used. Slashes are replaced with hyphens so it can be used in note titles. This lets you make a note per chapter, e.g. a title of "Books/{title}/{chaptertitle}".
 - {format}: The book format the highlight is in, e.g. EPUB.
 - {color}: The highlight's color, e.g. "yellow". For decoration-style highlights (underline, etc.) this is the decoration name instead.
+- {colorlabel}: A custom label for the highlight's color, configured in the Formatting Options (map a color to text, e.g. "yellow = Important"). Falls back to the color name if no label is set. Useful for giving each color a meaning, e.g. a body of "{colorlabel}: {blockquote}".
 
 **Time Data:**
 - {date}: Date the highlight was made, formatted as YYYY-MM-DD.

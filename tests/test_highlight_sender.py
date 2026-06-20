@@ -97,6 +97,52 @@ class TestHighlightFormatAndColor(unittest.TestCase):
         self.assertEqual(self.dict_for(None)["color"], "")
 
 
+class TestColorLabel(unittest.TestCase):
+    def label_for(self, which, labels=None):
+        annot = {"highlighted_text": "x", "uuid": "u", "spine_index": 0, "start_cfi": "/2/2:0",
+                 "style": {"kind": "color", "which": which}}
+        d = make_highlight_format_dict({"book_id": 1, "format": "EPUB", "annotation": annot}, "Lib", labels)
+        return d["colorlabel"]
+
+    def test_mapped_label(self):
+        self.assertEqual(self.label_for("yellow", {"yellow": "Important"}), "Important")
+
+    def test_falls_back_to_color_when_unmapped(self):
+        self.assertEqual(self.label_for("green", {"yellow": "Important"}), "green")
+
+    def test_no_labels_uses_color(self):
+        self.assertEqual(self.label_for("blue"), "blue")
+
+    def test_case_insensitive(self):
+        self.assertEqual(self.label_for("Yellow", {"yellow": "Important"}), "Important")
+
+
+class TestColorFilter(unittest.TestCase):
+    def annotation(self, color):
+        annot = {"type": "highlight"}
+        if color is not None:
+            annot["style"] = {"kind": "color", "which": color}
+        return {"annotation": annot}
+
+    def sender(self, colors):
+        s = HighlightSender()
+        s.set_color_filter(colors)
+        return s
+
+    def test_no_filter_allows_all(self):
+        s = self.sender([])
+        self.assertTrue(s.is_valid_highlight(self.annotation("blue"), lambda x: True))
+        self.assertTrue(s.is_valid_highlight(self.annotation(None), lambda x: True))
+
+    def test_filter_includes_listed_color(self):
+        self.assertTrue(self.sender(["yellow"]).is_valid_highlight(self.annotation("yellow"), lambda x: True))
+
+    def test_filter_excludes_unlisted_and_colorless(self):
+        s = self.sender(["yellow"])
+        self.assertFalse(s.is_valid_highlight(self.annotation("blue"), lambda x: True))
+        self.assertFalse(s.is_valid_highlight(self.annotation(None), lambda x: True))
+
+
 class TestBookMetadata(unittest.TestCase):
     def make(self, **meta):
         base = {"title": "T", "authors": "A"}

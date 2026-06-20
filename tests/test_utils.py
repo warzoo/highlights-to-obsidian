@@ -10,7 +10,8 @@ _calibre_stub.install()
 
 from calibre_plugins.highlights_to_obsidian.utils import (
     parse_send_time, parse_highlight_time, annotation_user, is_unsent_or_edited,
-    note_path, write_note_to_file, native_open, SEND_TIME_FORMAT, CALIBRE_TIME_FORMAT)
+    note_path, write_note_to_file, native_open, parse_color_labels, parse_color_filter,
+    SEND_TIME_FORMAT, CALIBRE_TIME_FORMAT)
 
 
 def read(path):
@@ -70,6 +71,28 @@ class TestFileWriting(unittest.TestCase):
             write_note_to_file(d, "Note", "first", append=True)
             path = write_note_to_file(d, "Note", "second", append=False)
             self.assertEqual(read(path), "second")
+
+
+class TestColorLabelParsing(unittest.TestCase):
+    def test_parses_mappings(self):
+        self.assertEqual(parse_color_labels("yellow = Important\nblue = Definition"),
+                         {"yellow": "Important", "blue": "Definition"})
+
+    def test_lowercases_color_and_ignores_bad_lines(self):
+        out = parse_color_labels("Yellow = Imp\n\nnot a mapping\ngreen=Idea")
+        self.assertEqual(out, {"yellow": "Imp", "green": "Idea"})
+
+    def test_empty(self):
+        self.assertEqual(parse_color_labels(""), {})
+
+
+class TestColorFilterParsing(unittest.TestCase):
+    def test_comma_separated_lowercased(self):
+        self.assertEqual(parse_color_filter("Yellow, blue ,  Green"), ["yellow", "blue", "green"])
+
+    def test_empty_means_all(self):
+        self.assertEqual(parse_color_filter(""), [])
+        self.assertEqual(parse_color_filter("  ,  "), [])
 
 
 class TestNativeOpen(unittest.TestCase):

@@ -5,6 +5,7 @@ from calibre_plugins.highlights_to_obsidian.config import prefs
 from calibre_plugins.highlights_to_obsidian.highlight_sender import HighlightSender
 from calibre_plugins.highlights_to_obsidian.utils import (parse_send_time, parse_highlight_time,
                                                           annotation_user, is_unsent_or_edited,
+                                                          parse_color_labels, parse_color_filter,
                                                           SEND_TIME_FORMAT)
 from time import strftime, gmtime
 
@@ -60,6 +61,8 @@ def send_highlights(parent, db, condition=lambda x: True, update_send_time=True,
         _sender.set_book_titles_authors(book_ids_to_metadata(db, restrict_to_book_ids))
         _sender.set_sort_key(prefs["sort_key"])
         _sender.set_sleep_time(prefs["sleep_secs"])
+        _sender.set_color_labels(parse_color_labels(prefs["color_labels"]))
+        _sender.set_color_filter(parse_color_filter(prefs["color_filter"]))
         if prefs['use_max_note_size']:
             _sender.set_max_file_size(int(prefs['max_note_size']), prefs['copy_header'])
 

@@ -150,7 +150,7 @@ def make_time_format_dict(data: Dict) -> Dict[str, str]:
     return time_options
 
 
-def make_highlight_format_dict(data: Dict, calibre_library: str) -> Dict[str, str]:
+def make_highlight_format_dict(data: Dict, calibre_library: str, color_labels: Dict[str, str] = None) -> Dict[str, str]:
     """
 
     :param data: json object of a calibre highlight
@@ -192,6 +192,8 @@ def make_highlight_format_dict(data: Dict, calibre_library: str) -> Dict[str, st
     # highlight style, e.g. {"kind": "color", "type": "builtin", "which": "yellow"}. "which" holds the
     # color name for color highlights (or the decoration name, e.g. "wavy", for decoration highlights).
     style = annot.get("style") or {}
+    color = style.get("which", "")
+    color_label = (color_labels or {}).get(color.lower(), color)  # user-mapped label, else the color
 
     highlight_format = {
         "highlight": annot["highlighted_text"],  # highlighted text
@@ -202,7 +204,8 @@ def make_highlight_format_dict(data: Dict, calibre_library: str) -> Dict[str, st
         "uuid": annot["uuid"],  # highlight's ID in calibre
         "chaptertitle": chapter_title,  # most specific table-of-contents section title
         "format": data.get("format", ""),  # the book format the highlight is in, e.g. EPUB
-        "color": style.get("which", ""),  # highlight color (or decoration style)
+        "color": color,  # highlight color (or decoration style)
+        "colorlabel": color_label,  # user-configured label for this color (falls back to the color)
     }
 
     return highlight_format
@@ -257,7 +260,8 @@ def make_sent_format_dict(total_sent, book_sent, highlight_sent) -> Dict[str, st
     return sent_dict
 
 
-def make_format_dict(data, calibre_library: str, book_titles_authors: Dict[int, Dict[str, str]]) -> Dict[str, str]:
+def make_format_dict(data, calibre_library: str, book_titles_authors: Dict[int, Dict[str, str]],
+                     color_labels: Dict[str, str] = None) -> Dict[str, str]:
     """
     :param data: json object of a calibre highlight
     :param calibre_library: name of the calibre library, to make a url to the highlight
@@ -272,7 +276,7 @@ def make_format_dict(data, calibre_library: str, book_titles_authors: Dict[int, 
 
     # if you add a format option, also update the format_options local variable in config.py and the docs in README.md
     time_options = make_time_format_dict(data)
-    highlight_options = make_highlight_format_dict(data, calibre_library)
+    highlight_options = make_highlight_format_dict(data, calibre_library, color_labels)
     book_options = make_book_format_dict(data, book_titles_authors)
 
     # these formatting options can't be calculated by the time make_format_dict is called.
@@ -553,6 +557,8 @@ class HighlightSender:
         self.sleep_time = 0
         self.vault_path = ""
         self.write_to_file = False
+        self.color_labels = {}  # {color: label} for the {colorlabel} option
+        self.color_filter = []  # lowercased color names; if non-empty, only these colors are sent
         # uuid -> highlight timestamp for the highlights sent by the most recent send() call
         self.sent_highlights = {}
 
@@ -570,6 +576,15 @@ class HighlightSender:
         """if True, highlights are written directly to .md files in the vault folder instead of being
         sent through the obsidian:// URI. this is more reliable and has no length limits."""
         self.write_to_file = write_to_file
+
+    def set_color_labels(self, color_labels):
+        """:param color_labels: dict of {color: label} backing the {colorlabel} formatting option."""
+        self.color_labels = color_labels or {}
+
+    def set_color_filter(self, color_filter):
+        """:param color_filter: list of lowercased color names. if non-empty, only highlights whose
+        color is in the list are sent."""
+        self.color_filter = color_filter or []
 
     def set_title_format(self, title_format: str):
         self.title_format = title_format
@@ -723,6 +738,11 @@ class HighlightSender:
         if _annot.get("removed"):
             return False  # don't try to send highlights that have been removed
 
+        if self.color_filter:
+            color = (_annot.get("style") or {}).get("which", "").lower()
+            if color not in self.color_filter:
+                return False  # only send highlights whose color is in the filter
+
         if not condition(_dat):  # or return condition(_dat)
             return False  # user-defined condition must be true for this highlight
 
@@ -738,7 +758,7 @@ class HighlightSender:
         formatted_body is a tuple with (formatted_text, sort_key)
         formatted_header is None if a header is already present in _headers.
         """
-        dat = make_format_dict(_highlight, self.library_name, self.book_titles_authors)
+        dat = make_format_dict(_highlight, self.library_name, self.book_titles_authors, self.color_labels)
         formatted = format_data(dat, self.title_format, self.body_format, self.no_notes_format)
 
         # only make one header per title

@@ -9,7 +9,7 @@ import os
 import subprocess
 import sys
 import time
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 # format used for prefs like last_send_time, e.g. "2022-09-10 20:32:08"
 SEND_TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
@@ -49,6 +49,31 @@ def is_unsent_or_edited(uuid: str, timestamp: str, sent_highlights: Dict[str, st
     if uuid not in sent_highlights:
         return True
     return parse_highlight_time(timestamp) > parse_highlight_time(sent_highlights[uuid])
+
+
+def parse_color_labels(text: str) -> Dict[str, str]:
+    """parses lines of 'color = label' into a {color: label} dict for the {colorlabel} option.
+
+    blank lines and lines without '=' are ignored. colors are matched case-insensitively, so they
+    are stored lowercased.
+    """
+    labels = {}
+    for line in text.splitlines():
+        if "=" not in line:
+            continue
+        color, _, label = line.partition("=")
+        color = color.strip().lower()
+        if color:
+            labels[color] = label.strip()
+    return labels
+
+
+def parse_color_filter(text: str) -> List[str]:
+    """parses a comma-separated list of colors into a list of lowercased names.
+
+    empty text -> [] which means "send all colors".
+    """
+    return [c.strip().lower() for c in text.split(",") if c.strip()]
 
 
 def note_path(vault_path: str, note_file: str) -> str:

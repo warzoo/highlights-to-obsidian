@@ -53,6 +53,8 @@ prefs.defaults['use_xdg_open'] = False
 prefs.defaults['sleep_secs'] = 0.1
 prefs.defaults['write_to_file'] = False  # write directly to vault files instead of using the obsidian:// URI
 prefs.defaults['vault_path'] = ""  # filesystem path to the obsidian vault, required when write_to_file is True
+prefs.defaults['color_labels'] = ""  # newline-separated "color = label" mappings for {colorlabel}
+prefs.defaults['color_filter'] = ""  # comma-separated colors to send; empty = send all colors
 
 
 
@@ -182,6 +184,21 @@ class FormattingDialog(QDialog):
 
         self.l.addSpacing(self.spacing)
 
+        # per-color labels for the {colorlabel} option
+        self.color_labels_label = QLabel(
+            "<b>Highlight color labels</b> (optional): map a color to text for the {colorlabel} option, "
+            "one per line, e.g. \"yellow = Important\".", self)
+        self.l.addWidget(self.color_labels_label)
+
+        self.color_labels_input = QPlainTextEdit(self)
+        self.color_labels_input.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+        self.color_labels_input.setPlainText(prefs['color_labels'])
+        self.color_labels_input.setPlaceholderText("yellow = Important\nblue = Definition")
+        self.l.addWidget(self.color_labels_input)
+        self.color_labels_label.setBuddy(self.color_labels_input)
+
+        self.l.addSpacing(self.spacing)
+
         # ok and cancel buttons
         self.buttons = QDialogButtonBox()
         self.buttons.setStandardButtons(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
@@ -203,7 +220,7 @@ class FormattingDialog(QDialog):
             "url", "location", "timestamp",
             "totalsent", "booksent", "highlightsent",
             "bookid", "uuid", "chaptertitle",
-            "calibreid", "isbn", "lccn", "identifiers", "pubdate", "tags", "format", "color",
+            "calibreid", "isbn", "lccn", "identifiers", "pubdate", "tags", "format", "color", "colorlabel",
         ]
         f_opt_str = "'" + "', '".join(format_options) + "'"
 
@@ -236,6 +253,7 @@ class FormattingDialog(QDialog):
         prefs['no_notes_format'] = self.no_notes_format_input.toPlainText()
         prefs['header_format'] = self.header_format_input.toPlainText()
         prefs['use_header'] = self.header_checkbox.isChecked()
+        prefs['color_labels'] = self.color_labels_input.toPlainText()
 
     def ok_button(self):
         self.save_settings()
@@ -301,6 +319,20 @@ class OtherConfigDialog(QDialog):
         self.sort_input.setText(prefs['sort_key'])
         self.l.addWidget(self.sort_input)
         self.sort_label.setBuddy(self.sort_input)
+
+        self.l.addSpacing(self.spacing)
+
+        # color filter: only send highlights of these colors
+        self.color_filter_label = QLabel(
+            "<b>Only send these highlight colors</b> (comma-separated, e.g. \"yellow, blue\"; "
+            "leave empty to send all colors):", self)
+        self.l.addWidget(self.color_filter_label)
+
+        self.color_filter_input = QLineEdit(self)
+        self.color_filter_input.setText(prefs['color_filter'])
+        self.color_filter_input.setPlaceholderText("yellow, blue (empty = all colors)")
+        self.l.addWidget(self.color_filter_input)
+        self.color_filter_label.setBuddy(self.color_filter_input)
 
         self.l.addSpacing(self.spacing)
 
@@ -405,6 +437,7 @@ class OtherConfigDialog(QDialog):
         prefs['write_to_file'] = self.write_to_file_checkbox.isChecked()
         prefs['vault_path'] = self.vault_path_input.text()
         prefs['sort_key'] = self.sort_input.text()
+        prefs['color_filter'] = self.color_filter_input.text()
         max_size = self.max_size_input.text()
         prefs['max_note_size'] = max_size if max_size.isnumeric() else prefs['max_note_size']
         prefs['use_max_note_size'] = self.use_max_size_checkbox.isChecked()
