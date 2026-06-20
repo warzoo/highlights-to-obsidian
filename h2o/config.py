@@ -55,6 +55,8 @@ prefs.defaults['write_to_file'] = False  # write directly to vault files instead
 prefs.defaults['vault_path'] = ""  # filesystem path to the obsidian vault, required when write_to_file is True
 prefs.defaults['color_labels'] = ""  # newline-separated "color = label" mappings for {colorlabel}
 prefs.defaults['color_filter'] = ""  # comma-separated colors to send; empty = send all colors
+prefs.defaults['use_custom_column'] = False  # read annotations from a custom column instead of calibre's own
+prefs.defaults['custom_column'] = ""  # the custom column's lookup name, e.g. "#annotations"
 
 
 
@@ -414,6 +416,24 @@ class OtherConfigDialog(QDialog):
         self.web_user_checkbox.setChecked(prefs['web_user'])
         self.l.addWidget(self.web_user_checkbox)
 
+        self.l.addSpacing(self.spacing)
+
+        # read annotations from a custom column (e.g. one populated by the Annotations plugin) instead
+        # of calibre's built-in annotations. sends the column's content as the note body, one per book.
+        self.use_column_checkbox = QCheckBox(
+            "Read annotations from a custom column instead of calibre's built-in annotations "
+            "(sends the column's content as the note body, one note per book)")
+        self.use_column_checkbox.setChecked(prefs['use_custom_column'])
+        self.l.addWidget(self.use_column_checkbox)
+
+        self.custom_column_label = QLabel("<b>Custom column lookup name</b> (e.g. #annotations):", self)
+        self.l.addWidget(self.custom_column_label)
+        self.custom_column_input = QLineEdit(self)
+        self.custom_column_input.setText(prefs['custom_column'])
+        self.custom_column_input.setPlaceholderText("#annotations")
+        self.l.addWidget(self.custom_column_input)
+        self.custom_column_label.setBuddy(self.custom_column_input)
+
         # checkbox for opening Obsidian with the OS's native command instead of Python's webbrowser
         self.native_open_checkbox = QCheckBox(
             "Open Obsidian with the OS's command (Windows/macOS/Linux) instead of Python's webbrowser "
@@ -464,6 +484,8 @@ class OtherConfigDialog(QDialog):
         username = self.web_user_name_input.text()
         prefs['web_user_name'] = "*" if username == "" else username
         prefs['web_user'] = self.web_user_checkbox.isChecked()
+        prefs['use_custom_column'] = self.use_column_checkbox.isChecked()
+        prefs['custom_column'] = self.custom_column_input.text().strip()
         prefs['use_xdg_open'] = self.native_open_checkbox.isChecked()
 
         sleep_time = self.sleep_time_input.text()

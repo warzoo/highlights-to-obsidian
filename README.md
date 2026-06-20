@@ -28,6 +28,8 @@ After installing, go to Preferences -> Toolbars & menus -> The main toolbar. The
 
 - You can restrict sending to specific highlight colors with the "Only send these highlight colors" option in the config's Other Options. Leave it empty to send all colors.
 
+- Instead of calibre's built-in annotations, you can have H2O read annotations from a custom column (for example, a column populated by the [Annotations](https://github.com/davidfor/calibre-annotations) plugin). Enable "Read annotations from a custom column" in the config's Other Options and enter the column's lookup name (e.g. `#annotations`). H2O then sends each book's column content as the note body (one note per book, overwritten on each send). Per-highlight options like {blockquote}, {color}, {location}, and sorting don't apply in this mode, since the column holds rendered text rather than calibre's structured highlight data.
+
 - You can set keyboard shortcuts in Preferences -> Shortcuts -> H2O.
 
 - Due to URI length limits, H2O can only send a few thousand words to a single note at once. Extra text will be sent to different notes with increasing numbers added to the end of the title. This can be changed in the config.

@@ -45,6 +45,14 @@ def send_highlights(parent, db, condition=lambda x: True, update_send_time=True,
     :return: number of highlights that were sent
     """
 
+    use_column = prefs["use_custom_column"]
+    if use_column and not prefs["custom_column"].strip():
+        error_dialog(parent, "Highlights to Obsidian: No column set",
+                     "You enabled 'read annotations from a custom column' but didn't set a column name. "
+                     "Set the column's lookup name (e.g. #annotations) in the config's Other Options.",
+                     show=True)
+        return 0
+
     def make_sender() -> HighlightSender:
         _sender = HighlightSender()
         # this might not work if the current library name has characters that don't work in urls.
@@ -66,35 +74,46 @@ def send_highlights(parent, db, condition=lambda x: True, update_send_time=True,
         if prefs['use_max_note_size']:
             _sender.set_max_file_size(int(prefs['max_note_size']), prefs['copy_header'])
 
-        """ all_annotations() and all_annotation_users()
-         https://github.com/kovidgoyal/calibre/blob/master/src/calibre/db/cache.py """
-        user = annotation_user(prefs["web_user"], prefs["web_user_name"])
-        _sender.set_annotations_list(
-            db.all_annotations(restrict_to_user=user, restrict_to_book_ids=restrict_to_book_ids))
+        if use_column:
+            _sender.set_annotations_list([])  # custom-column mode reads the column, not calibre annotations
+        else:
+            """ all_annotations() and all_annotation_users()
+             https://github.com/kovidgoyal/calibre/blob/master/src/calibre/db/cache.py """
+            user = annotation_user(prefs["web_user"], prefs["web_user_name"])
+            _sender.set_annotations_list(
+                db.all_annotations(restrict_to_user=user, restrict_to_book_ids=restrict_to_book_ids))
         return _sender
 
     sender = make_sender()
     try:
-        amt = sender.send(condition=condition)
+        if use_column:
+            amt = sender.send_columns(book_column_contents(db, restrict_to_book_ids))
+        else:
+            amt = sender.send(condition=condition)
     except Exception as e:
         error_dialog(parent, "Highlights to Obsidian: Error sending highlights", str(e), show=True)
         return 0
 
     if amt > 0:
-        # record which highlights were sent (by uuid) so we never accidentally double-send them.
-        # a fresh dict is assigned (rather than mutated in place) so JSONConfig persists the change.
-        sent = dict(prefs["sent_highlights"])
-        sent.update(sender.sent_highlights)
-        prefs["sent_highlights"] = sent
+        if use_column:
+            # column mode has no per-highlight uuids/timestamps, so skip the dedup/send-time bookkeeping
+            info = f"Success: annotations from {amt} book{'' if amt == 1 else 's'} sent to Obsidian."
+        else:
+            # record which highlights were sent (by uuid) so we never accidentally double-send them.
+            # a fresh dict is assigned (rather than mutated in place) so JSONConfig persists the change.
+            sent = dict(prefs["sent_highlights"])
+            sent.update(sender.sent_highlights)
+            prefs["sent_highlights"] = sent
 
-        if record_batch:
-            prefs["last_batch_uuids"] = list(sender.sent_highlights.keys())
+            if record_batch:
+                prefs["last_batch_uuids"] = list(sender.sent_highlights.keys())
 
-        if update_send_time:
-            # has to be gmtime() so that we use utc, matching calibre's stored highlight times.
-            prefs["last_send_time"] = strftime(SEND_TIME_FORMAT, gmtime())
+            if update_send_time:
+                # has to be gmtime() so that we use utc, matching calibre's stored highlight times.
+                prefs["last_send_time"] = strftime(SEND_TIME_FORMAT, gmtime())
 
-        info = f"Success: {amt} highlight{' has' if amt == 1 else 's have'} been sent to Obsidian."
+            info = f"Success: {amt} highlight{' has' if amt == 1 else 's have'} been sent to Obsidian."
+
         if prefs['highlights_sent_dialog']:
             info_dialog(parent, "Highlights Sent", info, show=True)
     else:
@@ -254,3 +273,23 @@ def book_ids_to_metadata(db, book_ids=None):
         }
 
     return ret
+
+
+def book_column_contents(db, book_ids=None):
+    """returns [(book_id, content), ...] for books that have content in the configured custom column.
+    used for custom-column mode, e.g. reading annotations stored by the Annotations plugin (issue #14).
+
+    :param db: calibre database: Cache().new_api
+    :param book_ids: if given, only these book ids are looked up; otherwise the whole library.
+    """
+    col = prefs["custom_column"].strip()
+    if col and not col.startswith("#"):
+        col = "#" + col  # custom column lookup names are prefixed with '#'
+    ids = db.all_book_ids() if book_ids is None else book_ids
+
+    out = []
+    for book_id in ids:
+        content = db.field_for(col, book_id)
+        if content:
+            out.append((book_id, content))
+    return out

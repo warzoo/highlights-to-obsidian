@@ -261,5 +261,52 @@ class TestSendToFile(unittest.TestCase):
             s.send()
 
 
+class TestSendColumns(unittest.TestCase):
+    def build_sender(self, vault_path):
+        s = HighlightSender()
+        s.set_title_format("{title}")
+        s.set_header_format("")
+        s.set_book_titles_authors({1: {"title": "BookOne", "authors": "A"},
+                                   2: {"title": "BookTwo", "authors": "B"}})
+        s.set_write_to_file(True)
+        s.set_vault_path(vault_path)
+        return s
+
+    def read(self, path):
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+
+    def test_one_note_per_book_with_column_content(self):
+        with tempfile.TemporaryDirectory() as d:
+            s = self.build_sender(d)
+            amt = s.send_columns([(1, "<p>hi from one</p>"), (2, "notes for two")])
+            self.assertEqual(amt, 2)
+            self.assertIn("hi from one", self.read(os.path.join(d, "BookOne.md")))
+            self.assertIn("notes for two", self.read(os.path.join(d, "BookTwo.md")))
+
+    def test_resend_overwrites_instead_of_appending(self):
+        with tempfile.TemporaryDirectory() as d:
+            s = self.build_sender(d)
+            s.send_columns([(1, "first")])
+            s.send_columns([(1, "second")])
+            content = self.read(os.path.join(d, "BookOne.md"))
+            self.assertIn("second", content)
+            self.assertNotIn("first", content)
+
+    def test_skips_empty_content(self):
+        with tempfile.TemporaryDirectory() as d:
+            s = self.build_sender(d)
+            self.assertEqual(s.send_columns([(1, ""), (2, None)]), 0)
+
+    def test_header_template_applied(self):
+        with tempfile.TemporaryDirectory() as d:
+            s = self.build_sender(d)
+            s.set_header_format("# {title}\n")
+            s.send_columns([(1, "body text")])
+            content = self.read(os.path.join(d, "BookOne.md"))
+            self.assertTrue(content.startswith("# BookOne\n"))
+            self.assertIn("body text", content)
+
+
 if __name__ == "__main__":
     unittest.main()

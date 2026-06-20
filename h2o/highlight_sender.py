@@ -37,6 +37,29 @@ def send_item_to_obsidian(obsidian_data: Dict[str, str]) -> None:
                          f"The path size will be larger than the max file size due to URL encoding).")
 
 
+def remove_slashes(text: str) -> str:
+    # remove slashes in the note's title, since slashes in obsidian note titles will specify a directory
+    return text.replace("/", "-").replace("\\", "-")
+
+
+def remove_illegal_title_chars(text: str) -> str:
+    # illegal title characters: * " \ / < > : | ?
+    # but we won't remove slashes because they're used for putting the note in a folder.
+    # these can be title characters, but will break Markdown links to the file: # ^ [ ]
+    illegals = '*"<>:|?#^[]'
+    for c in illegals:
+        text = text.replace(c, "")
+    return text
+
+
+def format_title(dat: Dict[str, str], title: str) -> str:
+    """formats a note title from its template: substitutes {title} (with slashes removed so it doesn't
+    create unwanted folders), applies the remaining placeholders, then strips characters that are
+    illegal in note titles."""
+    pre_format = title.replace("{title}", remove_slashes(dat["title"]))
+    return remove_illegal_title_chars(format_with(pre_format, dat))
+
+
 def format_data(dat: Dict[str, str], title: str, body: str, no_notes_body: str = None) -> List[str]:
     """
     apply string.format() to title and body with data values from dat. Also removes slashes from title.
@@ -45,36 +68,13 @@ def format_data(dat: Dict[str, str], title: str, body: str, no_notes_body: str =
 
     :return: list containing two strings: [formatted title, formatted body]
     """
-
-    def remove_slashes(text: str) -> str:
-        # remove slashes in the note's title, since slashes in obsidian note titles will specify a directory
-        return text.replace("/", "-").replace("\\", "-")
-
-    def remove_illegal_title_chars(text: str) -> str:
-        # illegal title characters characters: * " \ / < > : | ?
-        # but we won't remove slashes because they're used for putting the note in a folder
-        # these can be title characters, but will break Markdown links to the file: # ^ [ ]
-        illegals = '*"<>:|?#^[]'
-        ret = text
-
-        for c in illegals:
-            ret = ret.replace(c, "")
-
-        return ret
-
-    # use format_map instead of format so that we leave invalid placeholders, e.g. if a highlight contains curly
-    # brackets, we don't want to replace the part in the highlight (it'll still be replaced if the highlight contains
-    # a valid placeholder though).
-    pre_format = title.replace("{title}", remove_slashes(dat["title"]))
-
     # highlights that have notes use `body`. highlights without notes use `no_notes_body`, falling
     # back to `body` when no_notes_body is empty -- this matches the config UI's promise that an empty
     # no-notes format "defaults to the above". (the old logic returned an empty body in that case.)
     has_notes = len(dat["notes"]) > 0
     chosen_body = body if has_notes or not no_notes_body else no_notes_body
 
-    return [remove_illegal_title_chars(format_with(pre_format, dat)),
-            format_with(chosen_body, dat)]
+    return [format_title(dat, title), format_with(chosen_body, dat)]
 
 
 def format_single(dat: Dict[str, str], item_format: str) -> str:
@@ -258,6 +258,21 @@ def make_sent_format_dict(total_sent, book_sent, highlight_sent) -> Dict[str, st
     sent_dict["highlightsent"] = str(highlight_sent)  # position of this highlight
 
     return sent_dict
+
+
+def make_now_time_dict() -> Dict[str, str]:
+    """returns the "current time" formatting options. used for custom-column notes, which have no
+    per-highlight timestamp, so only the *now* time placeholders make sense."""
+    local = time.localtime()
+    utc = time.gmtime()
+    return {
+        "utcnow": time.strftime("%Y-%m-%d %H:%M:%S", utc),
+        "datenow": time.strftime("%Y-%m-%d", utc),
+        "timenow": time.strftime("%H:%M:%S", utc),
+        "localnow": time.strftime("%Y-%m-%d %H:%M:%S", local),
+        "localdatenow": time.strftime("%Y-%m-%d", local),
+        "localtimenow": time.strftime("%H:%M:%S", local),
+    }
 
 
 def make_format_dict(data, calibre_library: str, book_titles_authors: Dict[int, Dict[str, str]],
@@ -782,13 +797,56 @@ class HighlightSender:
 
         return formatted[0], (formatted[1], self.format_sort_key(dat)), header
 
-    def deliver(self, note_file: str, note_content: str) -> None:
+    def deliver(self, note_file: str, note_content: str, append: bool = True) -> None:
         """delivers a single note, either by writing it directly into the vault folder (reliable, no
-        length limits, doesn't need Obsidian open) or via the obsidian:// URI."""
+        length limits, doesn't need Obsidian open) or via the obsidian:// URI.
+
+        :param append: if True, append to an existing note; if False, overwrite it (used by
+        custom-column mode so re-sending refreshes a note instead of duplicating it)."""
         if self.write_to_file:
-            write_note_to_file(self.vault_path, note_file, note_content, append=True)
+            write_note_to_file(self.vault_path, note_file, note_content, append=append)
         else:
-            send_item_to_obsidian(self.make_obsidian_data(note_file, note_content))
+            data = self.make_obsidian_data(note_file, note_content)
+            if not append:
+                data.pop("append", None)
+                data["overwrite"] = "true"
+            send_item_to_obsidian(data)
+
+    def make_book_note_dict(self, book_id) -> "SafeDict":
+        """format dict for a per-book note in custom-column mode: book metadata plus current-time
+        options (there's no per-highlight data in this mode)."""
+        book_options = make_book_format_dict({"book_id": book_id}, self.book_titles_authors)
+        return SafeDict(**make_now_time_dict(), **book_options)
+
+    def send_columns(self, book_columns) -> int:
+        """custom-column mode: send one note per book, using the book's custom-column content as the
+        body, instead of calibre's structured annotations.
+
+        Notes are overwritten (not appended) so re-sending refreshes them rather than duplicating.
+        Per-highlight options (blockquote/color/location/sorting/uuid dedup) don't apply here.
+
+        :param book_columns: iterable of (book_id, column_content) pairs.
+        :return: number of notes sent.
+        """
+        if self.write_to_file and not os.path.isdir(self.vault_path):
+            raise RuntimeError(
+                f"Can't write highlights to files: the vault folder '{self.vault_path}' doesn't exist. "
+                f"Set a valid vault folder path in the Highlights to Obsidian config, or turn off "
+                f"'write highlights directly to vault files'.")
+
+        self.sent_highlights = {}  # custom-column mode has no per-highlight uuids
+        count = 0
+        for book_id, content in book_columns:
+            if not content:
+                continue
+            dat = self.make_book_note_dict(book_id)
+            title = format_title(dat, self.title_format)
+            header = format_with(self.header_format, dat) if self.header_format else ""
+            self.deliver(title, header + str(content), append=False)
+            count += 1
+            if not self.write_to_file:
+                time.sleep(self.sleep_time)
+        return count
 
     def send(self, condition: Callable[[Any], bool] = lambda x: True):
         """
