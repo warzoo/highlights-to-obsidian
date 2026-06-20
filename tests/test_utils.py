@@ -11,7 +11,7 @@ _calibre_stub.install()
 from calibre_plugins.highlights_to_obsidian.utils import (
     parse_send_time, parse_highlight_time, annotation_user, is_unsent_or_edited,
     note_path, write_note_to_file, native_open, parse_color_labels, parse_color_filter,
-    SEND_TIME_FORMAT, CALIBRE_TIME_FORMAT)
+    yaml_safe, format_with, SEND_TIME_FORMAT, CALIBRE_TIME_FORMAT)
 
 
 def read(path):
@@ -71,6 +71,25 @@ class TestFileWriting(unittest.TestCase):
             write_note_to_file(d, "Note", "first", append=True)
             path = write_note_to_file(d, "Note", "second", append=False)
             self.assertEqual(read(path), "second")
+
+
+class TestYamlSafe(unittest.TestCase):
+    def test_preserves_colon_inside_quotes(self):
+        self.assertEqual(yaml_safe("Book: Subtitle"), '"Book: Subtitle"')
+
+    def test_escapes_quotes_and_backslashes(self):
+        self.assertEqual(yaml_safe('a"b\\c'), '"a\\"b\\\\c"')
+
+    def test_escapes_newlines(self):
+        self.assertEqual(yaml_safe("a\nb"), '"a\\nb"')
+
+
+class TestFormatWith(unittest.TestCase):
+    def test_plain_substitution(self):
+        self.assertEqual(format_with("x={a}", {"a": "1"}), "x=1")
+
+    def test_yaml_spec_quotes_value(self):
+        self.assertEqual(format_with("t: {a:yaml}", {"a": "X: Y"}), 't: "X: Y"')
 
 
 class TestColorLabelParsing(unittest.TestCase):

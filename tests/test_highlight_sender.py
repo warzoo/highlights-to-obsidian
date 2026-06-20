@@ -9,7 +9,7 @@ import _calibre_stub
 _calibre_stub.install()
 
 from calibre_plugins.highlights_to_obsidian.highlight_sender import (
-    format_data, make_highlight_format_dict, make_book_format_dict,
+    format_data, format_single, make_highlight_format_dict, make_book_format_dict,
     BookData, BookList, HighlightSender, SafeDict)
 
 
@@ -168,6 +168,18 @@ class TestBookMetadata(unittest.TestCase):
         self.assertEqual(d["tags"], "")
         self.assertEqual(d["identifiers"], "")
         self.assertEqual(d["pubdate"], "")
+
+
+class TestYamlFormatSpec(unittest.TestCase):
+    def test_title_yaml_in_frontmatter(self):
+        out = format_single(SafeDict(title="Book: Sub"), "title: {title:yaml}")
+        self.assertEqual(out, 'title: "Book: Sub"')
+
+    def test_plain_substitution_unchanged(self):
+        self.assertEqual(format_single(SafeDict(a="1"), "v={a}"), "v=1")
+
+    def test_unknown_placeholder_left_intact(self):
+        self.assertEqual(format_single(SafeDict(a="1"), "{unknown}"), "{unknown}")
 
 
 class TestBookDataSplitting(unittest.TestCase):

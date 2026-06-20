@@ -5,7 +5,7 @@ from typing import Dict, List, Callable, Any, Tuple, Iterable, Union
 from urllib.parse import urlencode, quote
 import datetime
 from calibre_plugins.highlights_to_obsidian.config import prefs
-from calibre_plugins.highlights_to_obsidian.utils import write_note_to_file, native_open
+from calibre_plugins.highlights_to_obsidian.utils import write_note_to_file, native_open, format_with
 
 # besides config.prefs (used only in HighlightSender.__init__) and the pure helpers in utils.py,
 # avoid importing anything from calibre or the rest of this plugin here. this keeps references to
@@ -73,13 +73,13 @@ def format_data(dat: Dict[str, str], title: str, body: str, no_notes_body: str =
     has_notes = len(dat["notes"]) > 0
     chosen_body = body if has_notes or not no_notes_body else no_notes_body
 
-    return [remove_illegal_title_chars(pre_format.format_map(dat)),
-            chosen_body.format_map(dat)]
+    return [remove_illegal_title_chars(format_with(pre_format, dat)),
+            format_with(chosen_body, dat)]
 
 
 def format_single(dat: Dict[str, str], item_format: str) -> str:
     """
-    returns item_format.format_map(dat)
+    returns item_format formatted with dat (also supports the {x:yaml} frontmatter-safe spec)
 
     :param dat: output of make_format_dict. dict containing keys and values for string formatting.
     :param item_format: string to be formatted
@@ -88,7 +88,7 @@ def format_single(dat: Dict[str, str], item_format: str) -> str:
     # use format_map instead of format so that we leave invalid placeholders, e.g. if a highlight contains curly
     # brackets, we don't want to replace the part in the highlight (it'll still be replaced if the highlight contains
     # a valid placeholder though).
-    return item_format.format_map(dat)
+    return format_with(item_format, dat)
 
 
 def make_time_format_dict(data: Dict) -> Dict[str, str]:

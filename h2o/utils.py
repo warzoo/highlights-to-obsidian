@@ -6,6 +6,7 @@ means the time-parsing, dedup, and file-writing logic lives in one place and can
 standalone, without a running calibre.
 """
 import os
+import string
 import subprocess
 import sys
 import time
@@ -49,6 +50,37 @@ def is_unsent_or_edited(uuid: str, timestamp: str, sent_highlights: Dict[str, st
     if uuid not in sent_highlights:
         return True
     return parse_highlight_time(timestamp) > parse_highlight_time(sent_highlights[uuid])
+
+
+def yaml_safe(value) -> str:
+    """quote a value so it is safe to use as a YAML frontmatter value (e.g. a book title containing
+    ':'). wraps it in double quotes and escapes characters that would break a double-quoted scalar."""
+    escaped = (str(value).replace("\\", "\\\\")
+                         .replace('"', '\\"')
+                         .replace("\n", "\\n")
+                         .replace("\r", "\\r"))
+    return '"' + escaped + '"'
+
+
+class _PluginFormatter(string.Formatter):
+    """str.format-style formatter that adds a ':yaml' format spec for frontmatter-safe values."""
+
+    def format_field(self, value, format_spec):
+        if format_spec == "yaml":
+            return yaml_safe(value)
+        return super().format_field(value, format_spec)
+
+
+_FORMATTER = _PluginFormatter()
+
+
+def format_with(template: str, mapping) -> str:
+    """like template.format_map(mapping), but also supports a ':yaml' format spec (e.g. {title:yaml})
+    that makes a value safe to use inside Obsidian YAML frontmatter.
+
+    mapping should be a SafeDict (or similar) so unknown placeholders are left intact.
+    """
+    return _FORMATTER.vformat(template, (), mapping)
 
 
 def parse_color_labels(text: str) -> Dict[str, str]:

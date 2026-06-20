@@ -37,6 +37,8 @@ After installing, go to Preferences -> Toolbars & menus -> The main toolbar. The
 
 ![](/images/formatting-options.png)
 
+To make a value safe to use inside Obsidian's YAML frontmatter (for example, a book title that contains a colon ":"), add `:yaml` to the placeholder, e.g. `{title:yaml}`. This wraps the value in quotes so it won't break your frontmatter.
+
 **Book Data:**
 - {title}: Title of the book the highlight is in.
 - {authors}: Authors of the book the highlight is in.

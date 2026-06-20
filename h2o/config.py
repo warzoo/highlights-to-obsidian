@@ -113,7 +113,9 @@ class FormattingDialog(QDialog):
 
         # note formatting info
         format_info = "<b>The following formatting options are available.</b> " + \
-                      "To use one, put it in curly brackets, as in {title} or {blockquote}."
+                      "To use one, put it in curly brackets, as in {title} or {blockquote}. " + \
+                      "To make a value safe for Obsidian frontmatter (e.g. a title with ':'), " + \
+                      "add ':yaml', as in {title:yaml}."
         self.note_format_label = QLabel(format_info, self)
         self.l.addWidget(self.note_format_label)
 
