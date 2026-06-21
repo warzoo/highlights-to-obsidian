@@ -304,6 +304,42 @@ class TestSendToFile(unittest.TestCase):
         self.assertIn("Vault folder path", str(ctx.exception))
 
 
+class TestTemplateOverridesHeader(unittest.TestCase):
+    """a configured template file becomes each note's header/scaffold, the home for frontmatter."""
+
+    def test_header_template_prefers_template_when_set(self):
+        s = HighlightSender()
+        s.set_header_format("HEADER")
+        self.assertEqual(s.header_template(), "HEADER")
+        s.set_template("TEMPLATE {title}")
+        self.assertEqual(s.header_template(), "TEMPLATE {title}")
+        s.set_template("")  # empty template falls back to the header format
+        self.assertEqual(s.header_template(), "HEADER")
+
+    def test_template_frontmatter_written_on_create(self):
+        with tempfile.TemporaryDirectory() as d:
+            s = HighlightSender()
+            s.set_title_format("{title}")
+            s.set_body_format("{blockquote}\n")
+            s.set_no_notes_format("{blockquote}\n")
+            s.set_header_format("IGNORED")
+            s.set_template("---\ntitle: {title:yaml}\nisbn: {isbn}\n---\n")
+            s.set_book_titles_authors({1: {"title": "My Book", "authors": "Me",
+                                           "identifiers": {"isbn": "123"}}})
+            s.set_write_to_file(True)
+            s.set_vault_path(d)
+            s.set_annotations_list([make_highlight(uuid="u1", text="hello", notes="n")])
+
+            s.send()
+
+            with open(os.path.join(d, "My Book.md"), encoding="utf-8") as f:
+                content = f.read()
+            # frontmatter from the template lands at the very top, with {title:yaml} quoted
+            self.assertTrue(content.startswith('---\ntitle: "My Book"\nisbn: 123\n---\n'))
+            self.assertIn("> hello", content)
+            self.assertNotIn("IGNORED", content)  # template overrode the header format
+
+
 class TestMergeSend(unittest.TestCase):
     def hl(self, uuid, text, spine, cfi):
         return {"book_id": 1, "format": "EPUB", "annotation": {

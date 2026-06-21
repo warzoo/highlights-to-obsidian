@@ -6,7 +6,7 @@ from calibre_plugins.highlights_to_obsidian.highlight_sender import HighlightSen
 from calibre_plugins.highlights_to_obsidian.utils import (parse_send_time, parse_highlight_time,
                                                           annotation_user, is_unsent_or_edited,
                                                           parse_color_labels, parse_color_filter,
-                                                          SEND_TIME_FORMAT)
+                                                          read_template, SEND_TIME_FORMAT)
 from calibre_plugins.highlights_to_obsidian.exceptions import (H2OError, H2OConfigError,
                                                                H2OURIError, H2OWriteError)
 from calibre_plugins.highlights_to_obsidian.log import get_logger
@@ -70,6 +70,9 @@ def send_highlights(parent, db, condition=lambda x: True, update_send_time=True,
         _sender.set_body_format(prefs["body_format"])
         _sender.set_no_notes_format(prefs["no_notes_format"])
         _sender.set_header_format(prefs["header_format"] if prefs["use_header"] else "")
+        # a configured template file (read from the vault) overrides the header format. read_template
+        # returns None if it isn't set / can't be found, in which case the header format is used.
+        _sender.set_template(read_template(prefs["vault_path"], prefs["template_file"]))
         _sender.set_book_titles_authors(book_ids_to_metadata(db, restrict_to_book_ids))
         _sender.set_sort_key(prefs["sort_key"])
         _sender.set_sleep_time(prefs["sleep_secs"])

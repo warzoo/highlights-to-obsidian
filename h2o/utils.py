@@ -287,3 +287,26 @@ def read_note_file(vault_path: str, note_file: str) -> str:
         return ""
     with open(path, encoding="utf-8") as f:
         return f.read()
+
+
+def template_path(vault_path: str, template_file: str):
+    """resolve a vault-relative template path (with or without a trailing .md) to its absolute .md
+    path, e.g. 'Reference/Templates/Book' -> <vault>/Reference/Templates/Book.md. returns None if
+    template_file or vault_path is empty."""
+    tpl = (template_file or "").strip()
+    if not tpl or not (vault_path or "").strip():
+        return None
+    if tpl.lower().endswith(".md"):
+        tpl = tpl[:-3]
+    return note_path(vault_path, tpl)
+
+
+def read_template(vault_path: str, template_file: str):
+    """read the content of a vault template file, used as a note's header/scaffold. template_file is a
+    vault-relative path (with or without .md), e.g. 'Reference/Templates/Book'. returns the file's
+    content, or None if it isn't configured, the vault path is empty, or the file doesn't exist."""
+    path = template_path(vault_path, template_file)
+    if path is None or not os.path.isfile(path):
+        return None
+    with open(path, encoding="utf-8") as f:
+        return f.read()

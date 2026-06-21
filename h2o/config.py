@@ -5,7 +5,7 @@ from qt.core import (QWidget, QVBoxLayout, QLabel, QLineEdit, QPlainTextEdit,
 from calibre.gui2 import warning_dialog
 from calibre.utils.config import JSONConfig
 from calibre_plugins.highlights_to_obsidian.utils import (parse_send_time, vault_name_looks_like_path,
-                                                          SEND_TIME_FORMAT)
+                                                          read_template, SEND_TIME_FORMAT)
 from calibre_plugins.highlights_to_obsidian.__init__ import version
 
 # This is where all preferences for this plugin will be stored
@@ -59,6 +59,7 @@ prefs.defaults['color_labels'] = ""  # newline-separated "color = label" mapping
 prefs.defaults['color_filter'] = ""  # comma-separated colors to send; empty = send all colors
 prefs.defaults['use_custom_column'] = False  # read annotations from a custom column instead of calibre's own
 prefs.defaults['custom_column'] = ""  # the custom column's lookup name, e.g. "#annotations"
+prefs.defaults['template_file'] = ""  # vault-relative template file used as each note's header/scaffold
 
 
 
@@ -192,6 +193,26 @@ class FormattingDialog(QDialog):
 
         self.l.addSpacing(self.spacing)
 
+        # template file: use a vault .md file as each note's header/scaffold (e.g. for frontmatter)
+        self.template_label = QLabel(
+            "<b>Note template file</b> (optional): a vault file whose content is used as each note's "
+            "header/scaffold, e.g. <i>Reference/Templates/Book</i>.<br/>"
+            "It overrides the header above, may use the same {placeholders}, and is the place to put "
+            "<b>YAML frontmatter</b> (start the file with <code>---</code> on its first line, then "
+            "<code>key: {title:yaml}</code> etc., then a closing <code>---</code>).<br/>"
+            "Needs the 'Vault folder path' (Other Options) set so the file can be found. The template "
+            "is written once when a note is created; existing notes aren't re-templated.", self)
+        self.template_label.setWordWrap(True)
+        self.l.addWidget(self.template_label)
+
+        self.template_input = QLineEdit(self)
+        self.template_input.setText(prefs['template_file'])
+        self.template_input.setPlaceholderText("e.g. Reference/Templates/Book")
+        self.l.addWidget(self.template_input)
+        self.template_label.setBuddy(self.template_input)
+
+        self.l.addSpacing(self.spacing)
+
         # per-color labels for the {colorlabel} option
         self.color_labels_label = QLabel(
             "<b>Highlight color labels</b> (optional): map a color to text for the {colorlabel} option, "
@@ -263,6 +284,18 @@ class FormattingDialog(QDialog):
         prefs['header_format'] = self.header_format_input.toPlainText()
         prefs['use_header'] = self.header_checkbox.isChecked()
         prefs['color_labels'] = self.color_labels_input.toPlainText()
+
+        # validate the template file (if set) against the saved vault path, so the user finds out now
+        # rather than silently getting no template at send time. read_template returns None when the
+        # file can't be located.
+        template_file = self.template_input.text().strip()
+        prefs['template_file'] = template_file
+        if template_file and read_template(prefs['vault_path'], template_file) is None:
+            warning_dialog(self, "Template file not found",
+                           f'The note template file "{template_file}" couldn\'t be found in your vault. '
+                           f'It should be a path relative to your vault, e.g. "Reference/Templates/Book", '
+                           f'and the "Vault folder path" (Other Options) must be set. Highlights will '
+                           f'still be sent, but without the template.', show=True)
 
     def ok_button(self):
         self.save_settings()

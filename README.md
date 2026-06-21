@@ -32,6 +32,8 @@ After installing, go to Preferences -> Toolbars & menus -> The main toolbar. The
 
 - Instead of calibre's built-in annotations, you can have H2O read annotations from a custom column (for example, a column populated by the [Annotations](https://github.com/davidfor/calibre-annotations) plugin). Enable "Read annotations from a custom column" in the config's Other Options and enter the column's lookup name (e.g. `#annotations`). H2O then sends each book's column content as the note body (one note per book, overwritten on each send). Per-highlight options like {blockquote}, {color}, {location}, and sorting don't apply in this mode, since the column holds rendered text rather than calibre's structured highlight data.
 
+- You can base each new note on a template file from your vault (for example, to add YAML frontmatter). Set "Note template file" in the config's Formatting Options to a vault-relative path like `Reference/Templates/Book`. Its content is used as the note's header/scaffold and may contain the same `{placeholders}` (filled in by H2O). The template is written once when a note is created (existing notes aren't re-templated), and it needs the "Vault folder path" set so the file can be found. Note that H2O fills its own `{placeholder}` syntax — not Obsidian/Templater's `{{...}}` or `<% %>` — and it doesn't run Obsidian's own template plugins.
+
 - You can set keyboard shortcuts in Preferences -> Shortcuts -> H2O.
 
 - Due to URI length limits, H2O can only send a few thousand words to a single note at once. Extra text will be sent to different notes with increasing numbers added to the end of the title. This can be changed in the config.
@@ -42,6 +44,17 @@ After installing, go to Preferences -> Toolbars & menus -> The main toolbar. The
 ![](/images/formatting-options.png)
 
 To make a value safe to use inside Obsidian's YAML frontmatter (for example, a book title that contains a colon ":"), add `:yaml` to the placeholder, e.g. `{title:yaml}`. This wraps the value in quotes so it won't break your frontmatter.
+
+To add frontmatter to your notes, put it in the **header** (or in a **note template file**, described above) — those are written once at the top of each note. Frontmatter must begin on the very first line, so make sure the header/template starts with `---` and has no blank line before it. For example:
+
+```
+---
+title: {title:yaml}
+author: {authors:yaml}
+isbn: {isbn}
+published: {pubdate}
+---
+```
 
 **Book Data:**
 - {title}: Title of the book the highlight is in.

@@ -13,6 +13,7 @@ from calibre_plugins.highlights_to_obsidian.utils import (
     note_path, write_note_to_file, native_open, parse_color_labels, parse_color_filter,
     yaml_safe, format_with, encode_sort_value, make_block, parse_note, merge_note, read_note_file,
     process_conditional_blocks, obsidian_block_id, vault_name_looks_like_path,
+    template_path, read_template,
     SEND_TIME_FORMAT, CALIBRE_TIME_FORMAT)
 
 
@@ -249,6 +250,34 @@ class TestVaultNameLooksLikePath(unittest.TestCase):
     def test_empty_returns_none(self):
         self.assertIsNone(vault_name_looks_like_path(""))
         self.assertIsNone(vault_name_looks_like_path("   "))
+
+
+class TestTemplateFile(unittest.TestCase):
+    def test_template_path_adds_md(self):
+        self.assertEqual(template_path("/vault", "Reference/Templates/Book"),
+                         os.path.join("/vault", "Reference", "Templates", "Book") + ".md")
+
+    def test_template_path_strips_existing_md(self):
+        self.assertEqual(template_path("/vault", "Book.md"), os.path.join("/vault", "Book") + ".md")
+
+    def test_template_path_none_when_unset(self):
+        self.assertIsNone(template_path("/vault", ""))
+        self.assertIsNone(template_path("", "Book"))
+
+    def test_read_template_returns_content(self):
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, "Reference", "Templates"))
+            content = "---\ntitle: {title}\n---\n"
+            with open(os.path.join(d, "Reference", "Templates", "Book.md"), "w", encoding="utf-8") as f:
+                f.write(content)
+            self.assertEqual(read_template(d, "Reference/Templates/Book"), content)
+            self.assertEqual(read_template(d, "Reference/Templates/Book.md"), content)  # .md tolerated
+
+    def test_read_template_none_when_missing_or_unset(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertIsNone(read_template(d, "nope"))
+        self.assertIsNone(read_template("", "Book"))
+        self.assertIsNone(read_template("/vault", ""))
 
 
 if __name__ == "__main__":

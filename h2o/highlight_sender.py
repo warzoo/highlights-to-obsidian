@@ -604,6 +604,7 @@ class HighlightSender:
         self.color_labels = {}  # {color: label} for the {colorlabel} option
         self.color_filter = []  # lowercased color names; if non-empty, only these colors are sent
         self.merge_notes = False  # insert highlights in sorted position, preserving edits (file mode)
+        self.template = ""  # vault template-file content used as each note's header/scaffold (see set_template)
         # uuid -> highlight timestamp for the highlights sent by the most recent send() call
         self.sent_highlights = {}
 
@@ -656,6 +657,21 @@ class HighlightSender:
         to the same file later, there will be two copies of the header.
         """
         self.header_format = header_format
+
+    def set_template(self, template: str):
+        """raw content of a vault template file (containing H2O {placeholders}) to use as each note's
+        header/scaffold, overriding the header format when non-empty. button_actions.py reads the file
+        named by the 'Note template file' config option and passes its content here. this lets users
+        keep frontmatter and note scaffolding in a vault template (e.g. Reference/Templates/Book)
+        instead of the header field; H2O fills its {placeholders} just like it does for the header.
+        because the template becomes the once-per-note header, frontmatter at the top of the file ends
+        up at the top of the note (on create), and existing notes aren't re-templated on later sends."""
+        self.template = template or ""
+
+    def header_template(self) -> str:
+        """the once-per-note header/scaffold format: the template-file content when one is set,
+        otherwise the configured header format."""
+        return self.template or self.header_format
 
     def set_book_titles_authors(self, book_titles_authors: Dict[int, Dict[str, str]]):
         """
@@ -816,7 +832,7 @@ class HighlightSender:
         formatted = format_data(dat, self.title_format, self.body_format, self.no_notes_format)
 
         # only make one header per title
-        header = None if formatted[0] in _headers else format_single(dat, self.header_format)
+        header = None if formatted[0] in _headers else format_single(dat, self.header_template())
 
         return formatted[0], (formatted[1], self.format_sort_key(dat)), header
 
@@ -881,7 +897,7 @@ class HighlightSender:
                 continue
             dat = self.make_book_note_dict(book_id)
             title = format_title(dat, self.title_format)
-            header = format_with(self.header_format, dat) if self.header_format else ""
+            header = format_with(self.header_template(), dat) if self.header_template() else ""
             self.deliver(title, header + str(content), append=False)
             count += 1
             if not self.write_to_file:
@@ -904,7 +920,7 @@ class HighlightSender:
             title, body = format_data(dat, self.title_format, self.body_format, self.no_notes_format)
             block = make_block(annot["uuid"], self.format_sort_key(dat), body)
             if title not in notes:
-                header = format_single(dat, self.header_format) if self.header_format else ""
+                header = format_single(dat, self.header_template()) if self.header_template() else ""
                 notes[title] = {"header": header, "blocks": []}
             notes[title]["blocks"].append(block)
 

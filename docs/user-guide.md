@@ -141,6 +141,48 @@ For a value used inside YAML frontmatter (e.g. a title containing `:`), add `:ya
 
 用于 YAML frontmatter 里的值(如含 `:` 的标题),加 `:yaml`,如 `{title:yaml}`,自动加引号转义。
 
+### Frontmatter / 前置元数据
+
+To add YAML frontmatter, put it in the **header** (it's written once, at the top of each note).
+Frontmatter must be the very first thing in the file, so the header must **start with `---` with no
+blank line before it**. Use `:yaml` for values that may contain special characters:
+
+要给笔记加 YAML frontmatter,把它写进 **header**(每篇笔记开头只写一次)。frontmatter 必须在文件
+最开头,所以 header 要**以 `---` 开头、前面不能有空行**。含特殊字符的值用 `:yaml`:
+
+```
+---
+title: {title:yaml}
+author: {authors:yaml}
+isbn: {isbn}
+published: {pubdate}
+tags: [book, highlights]
+---
+```
+
+On later sends the header isn't repeated, so frontmatter isn't duplicated; in merge mode your existing
+frontmatter is left untouched. H2O only writes frontmatter when a note is first created — it doesn't
+edit fields in an already-existing note's frontmatter.
+
+之后再发送时 header 不会重复,所以 frontmatter 不会重复;合并模式下你已有的 frontmatter 原样保留。
+H2O 只在笔记**首次创建**时写 frontmatter,不会去修改已存在笔记里 frontmatter 的字段。
+
+### Note template file / 笔记模板文件
+
+Instead of typing the header in the config, you can keep it in a **template file** in your vault. Set
+**Config → Formatting Options → Note template file** to a vault-relative path, e.g.
+`Reference/Templates/Book`. Its content becomes each new note's header/scaffold, with the same
+`{placeholders}` filled in — a natural home for the frontmatter above. It needs the **Vault folder
+path** (Other Options) set so the file can be found, is applied once when a note is created, and uses
+H2O's `{placeholder}` syntax (not Obsidian/Templater's `{{...}}` or `<% %>` — H2O can't run Obsidian's
+own template plugins).
+
+除了在配置里输入 header,你也可以把它放进 vault 里的**模板文件**。在 **Config → Formatting Options →
+Note template file** 填一个相对 vault 的路径,如 `Reference/Templates/Book`。文件内容会作为每篇新
+笔记的 header/骨架,里面同样的 `{占位符}` 会被填充——正好用来放上面的 frontmatter。它需要设置
+**Vault folder path**(Other Options)才能找到文件;只在笔记创建时套用一次;用的是 H2O 的 `{占位符}`
+语法(不是 Obsidian/Templater 的 `{{...}}` 或 `<% %>`——H2O 无法运行 Obsidian 自己的模板插件)。
+
 ---
 
 ## 5. Multiple readers / 多个读书人
