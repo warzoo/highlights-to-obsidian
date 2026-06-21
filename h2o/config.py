@@ -457,12 +457,25 @@ class OtherConfigDialog(QDialog):
         self.l.addWidget(self.custom_column_input)
         self.custom_column_label.setBuddy(self.custom_column_input)
 
-        # checkbox for opening Obsidian with the OS's native command instead of Python's webbrowser
+        # checkbox for opening Obsidian with the raw OS command instead of calibre's URL handler.
+        # by default (unchecked) H2O opens the obsidian:// link through calibre's own open_url, which
+        # sanitizes calibre's bundled environment first; checking this uses the raw native command.
         self.native_open_checkbox = QCheckBox(
-            "Open Obsidian with the OS's command (Windows/macOS/Linux) instead of Python's webbrowser "
-            "(may help if highlights open a web browser, or if large notes aren't sent)")
+            "Advanced: open Obsidian with the raw OS command (xdg-open / open / startfile) instead of "
+            "Calibre's URL handler")
         self.native_open_checkbox.setChecked(prefs['use_xdg_open'])
         self.l.addWidget(self.native_open_checkbox)
+
+        self.native_open_note = QLabel(
+            "By default H2O opens the obsidian:// link through Calibre's own handler, which works on "
+            "Windows, macOS and Linux.<br/>"
+            "On <b>Linux</b>, the raw OS command above often fails to launch from Calibre's bundled "
+            "environment ($LD_LIBRARY_PATH etc.), so leave it unchecked.<br/>"
+            "If a web browser opens, it will ask you to confirm the obsidian:// link (a browser "
+            "security measure). To avoid browsers and prompts entirely, enable <b>'Write highlights "
+            "directly to vault files'</b> above.", self)
+        self.native_open_note.setWordWrap(True)
+        self.l.addWidget(self.native_open_note)
 
         self.l.addSpacing(self.spacing)
 

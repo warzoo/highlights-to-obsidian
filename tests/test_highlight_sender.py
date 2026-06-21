@@ -10,7 +10,7 @@ _calibre_stub.install()
 
 from calibre_plugins.highlights_to_obsidian.highlight_sender import (
     format_data, format_single, make_highlight_format_dict, make_book_format_dict,
-    all_format_keys, BookData, BookList, HighlightSender, SafeDict)
+    all_format_keys, BookData, BookList, HighlightSender, SafeDict, send_item_to_obsidian)
 from calibre_plugins.highlights_to_obsidian.exceptions import H2OConfigError
 
 
@@ -302,6 +302,37 @@ class TestSendToFile(unittest.TestCase):
             s.send()
         # the message should point at the right field, not the vault name
         self.assertIn("Vault folder path", str(ctx.exception))
+
+
+class TestUriOpenerInjection(unittest.TestCase):
+    """URI mode should route through an injected opener (button_actions injects calibre.gui2.open_url
+    so the obsidian:// handler launches with a sanitized environment, which is the Linux fix)."""
+
+    def test_send_item_uses_injected_opener(self):
+        captured = []
+        send_item_to_obsidian({"vault": "V", "file": "F", "content": "C"}, opener=captured.append)
+        self.assertEqual(len(captured), 1)
+        self.assertTrue(captured[0].startswith("obsidian://new?"))
+        self.assertIn("vault=V", captured[0])
+        self.assertIn("file=F", captured[0])
+
+    def test_sender_routes_uri_through_open_uri(self):
+        captured = []
+        s = HighlightSender()
+        s.set_title_format("{title}")
+        s.set_body_format("{blockquote}\n")
+        s.set_no_notes_format("{blockquote}\n")
+        s.set_header_format("")
+        s.set_book_titles_authors({1: {"title": "MyBook", "authors": "Me"}})
+        s.set_open_uri(captured.append)  # URI mode (write_to_file defaults to False)
+        s.set_annotations_list([make_highlight(uuid="u1", text="hello", notes="n")])
+
+        amt = s.send()
+
+        self.assertEqual(amt, 1)
+        self.assertEqual(len(captured), 1)
+        self.assertTrue(captured[0].startswith("obsidian://new?"))
+        self.assertIn("MyBook", captured[0])  # the note title ends up in the 'file' param
 
 
 class TestMergeSend(unittest.TestCase):
