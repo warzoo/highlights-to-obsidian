@@ -1,5 +1,5 @@
-from qt.core import QDialog, QVBoxLayout, QPushButton, QMessageBox, QLabel
-from calibre.gui2 import info_dialog, error_dialog
+from qt.core import QDialog, QVBoxLayout, QPushButton, QMessageBox, QLabel, QUrl
+from calibre.gui2 import info_dialog, error_dialog, open_url
 from calibre.library import current_library_name
 from calibre_plugins.highlights_to_obsidian.config import prefs
 from calibre_plugins.highlights_to_obsidian.highlight_sender import HighlightSender
@@ -78,6 +78,13 @@ def send_highlights(parent, db, condition=lambda x: True, update_send_time=True,
         _sender.set_sleep_time(prefs["sleep_secs"])
         _sender.set_color_labels(parse_color_labels(prefs["color_labels"]))
         _sender.set_color_filter(parse_color_filter(prefs["color_filter"]))
+        if not prefs["use_xdg_open"]:
+            # open the obsidian:// uri through calibre's own handler. open_url runs inside calibre's
+            # sanitize_env_vars(), which restores the bundled LD_LIBRARY_PATH etc. before launching --
+            # without this, on Linux the obsidian:// handler fails to start from calibre's /opt
+            # environment. checking "Open Obsidian with the OS's command" skips this for the raw
+            # native xdg-open/open/startfile path instead.
+            _sender.set_open_uri(lambda uri: open_url(QUrl(uri)))
         if prefs['use_max_note_size']:
             _sender.set_max_file_size(int(prefs['max_note_size']), prefs['copy_header'])
 

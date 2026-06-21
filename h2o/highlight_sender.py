@@ -17,17 +17,24 @@ from calibre_plugins.highlights_to_obsidian.exceptions import (H2OError, H2OConf
 # and in make_sender() in button_actions.py.
 
 
-def send_item_to_obsidian(obsidian_data: Dict[str, str]) -> None:
+def send_item_to_obsidian(obsidian_data: Dict[str, str], opener: Callable[[str], Any] = None) -> None:
     """
     :param obsidian_data: should contain keys and values for 'vault', 'file', 'content', and anything
     else you want to put into the obsidian://new url
+    :param opener: optional callable(uri) used to open the obsidian:// uri. button_actions.py injects
+    calibre.gui2.open_url here (see HighlightSender.set_open_uri); it sanitizes calibre's bundled
+    environment before launching, which is what makes the uri handler start reliably -- notably on
+    Linux, where a raw subprocess xdg-open inherits calibre's LD_LIBRARY_PATH and fails to launch the
+    handler. when not given, falls back to the OS command / Python webbrowser (the old behavior).
 
     for reference, see https://help.obsidian.md/Advanced+topics/Using+obsidian+URI#Action+new
     """
     encoded_data = urlencode(obsidian_data, quote_via=quote)
     uri = "obsidian://new?" + encoded_data
     try:
-        if prefs['use_xdg_open']:
+        if opener is not None:
+            opener(uri)
+        elif prefs['use_xdg_open']:
             # open with the OS's native handler (os.startfile / open / xdg-open) instead of a web
             # browser. "use_xdg_open" is the historical pref name; this now works on every OS.
             native_open(uri)
@@ -605,6 +612,7 @@ class HighlightSender:
         self.color_filter = []  # lowercased color names; if non-empty, only these colors are sent
         self.merge_notes = False  # insert highlights in sorted position, preserving edits (file mode)
         self.template = ""  # vault template-file content used as each note's header/scaffold (see set_template)
+        self.open_uri = None  # injected callable(uri) for opening the obsidian:// uri (see set_open_uri)
         # uuid -> highlight timestamp for the highlights sent by the most recent send() call
         self.sent_highlights = {}
 
@@ -637,6 +645,14 @@ class HighlightSender:
         position, updating existing highlights in place and preserving the user's manual edits, instead
         of being appended at the bottom. has no effect unless write_to_file is also enabled."""
         self.merge_notes = merge_notes
+
+    def set_open_uri(self, open_uri: Callable[[str], Any]):
+        """inject the callable used to open the obsidian:// uri (URI mode only, i.e. when not writing
+        directly to files). button_actions.py passes calibre.gui2.open_url, which restores calibre's
+        bundled environment variables before launching so the obsidian:// handler starts reliably
+        (this is the fix for Linux, where a raw xdg-open from calibre's /opt environment fails). if
+        left unset, sending falls back to the OS command / Python webbrowser per the use_xdg_open pref."""
+        self.open_uri = open_uri
 
     def set_title_format(self, title_format: str):
         self.title_format = title_format
@@ -870,7 +886,7 @@ class HighlightSender:
             if not append:
                 data.pop("append", None)
                 data["overwrite"] = "true"
-            send_item_to_obsidian(data)
+            send_item_to_obsidian(data, self.open_uri)
 
     def make_book_note_dict(self, book_id) -> "SafeDict":
         """format dict for a per-book note in custom-column mode: book metadata plus current-time
