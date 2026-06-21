@@ -1,6 +1,9 @@
 # calibre's exported annotations file
 *.calibre_annotation_collection
 
+# Plugin build output (release zips are published via GitHub Releases, not committed)
+zip/
+
 # Claude Code session/local files
 .claude/
 
