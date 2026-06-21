@@ -6,7 +6,8 @@ from urllib.parse import urlencode, quote
 import datetime
 from calibre_plugins.highlights_to_obsidian.config import prefs
 from calibre_plugins.highlights_to_obsidian.utils import (write_note_to_file, native_open, format_with,
-                                                          make_block, merge_note, read_note_file)
+                                                          make_block, merge_note, read_note_file,
+                                                          process_conditional_blocks, obsidian_block_id)
 
 # besides config.prefs (used only in HighlightSender.__init__) and the pure helpers in utils.py,
 # avoid importing anything from calibre or the rest of this plugin here. this keeps references to
@@ -74,6 +75,11 @@ def format_data(dat: Dict[str, str], title: str, body: str, no_notes_body: str =
     # no-notes format "defaults to the above". (the old logic returned an empty body in that case.)
     has_notes = len(dat["notes"]) > 0
     chosen_body = body if has_notes or not no_notes_body else no_notes_body
+
+    # resolve {if_notes}...{end_if_notes} blocks so a body can show extra content (e.g. a "my notes"
+    # section) only for highlights that actually have notes, as an alternative to the separate
+    # no-notes body template above.
+    chosen_body = process_conditional_blocks(chosen_body, has_notes)
 
     return [format_title(dat, title), format_with(chosen_body, dat)]
 
@@ -203,10 +209,17 @@ def make_highlight_format_dict(data: Dict, calibre_library: str, color_labels: D
         "url": url_format.format(**url_args),  # calibre:// url to open ebook viewer to this highlight
         "location": url_args["location"],  # epub cfi location of this highlight
         "uuid": annot["uuid"],  # highlight's ID in calibre
+        "blockid": obsidian_block_id(annot["uuid"]),  # uuid sanitized for use as an Obsidian ^block id
         "chaptertitle": chapter_title,  # most specific table-of-contents section title
         "format": data.get("format", ""),  # the book format the highlight is in, e.g. EPUB
         "color": color,  # highlight color (or decoration style)
         "colorlabel": color_label,  # user-configured label for this color (falls back to the color)
+        # which calibre user made the highlight. user/user_type live on the annotation record (not the
+        # inner "annotation" dict); .get keeps this safe for data that lacks them (e.g. the sample
+        # used by all_format_keys()). "user" is "viewer" for the desktop reader, or the account name
+        # for content-server (web) users; "usertype" is "local" or "web".
+        "user": data.get("user", "") or "",
+        "usertype": data.get("user_type", "") or "",
     }
 
     return highlight_format

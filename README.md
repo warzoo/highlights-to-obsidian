@@ -57,15 +57,18 @@ To make a value safe to use inside Obsidian's YAML frontmatter (for example, a b
 **Highlight Data:**
 - {highlight}: The highlighted text.
 - {blockquote}: The highlighted text, formatted as a blockquote. An arrow and a space "> " are added to the beginning of each line.
-- {notes}: The user's notes on this highlight, if any notes exist. There is a config option that allows you to set different formatting depending on whether a highlight includes notes.
+- {notes}: The user's notes on this highlight, if any notes exist. There is a config option that allows you to set different formatting depending on whether a highlight includes notes. Alternatively, wrap part of the body in `{if_notes}...{end_if_notes}` to include that part only for highlights that have notes (e.g. `{if_notes}\n### My notes\n{notes}\n{end_if_notes}`).
 - {url}: A [calibre url](https://manual.calibre-ebook.com/url_scheme.html) to open the ebook viewer to this highlight. Note that this may not work if your library's name contains unsafe URL characters. Numbers, letters, spaces, underscores, and hyphens are all safe.
 - {location}: The highlight's EPUB CFI location in the book. For example, "/2/8/6/5:192". As a sort key, this will order highlights by their position in the book.
 - {timestamp}: The highlight's Unix timestamp. As a sort key, this will order highlights by when they were made.
 - {uuid}: The highlight's unique ID in calibre. For example, "TlNlh8_I5VGKUtqdfbOxDw".
+- {blockid}: The highlight's uuid sanitized for use as an [Obsidian block id](https://help.obsidian.md/Linking+notes+and+files/Internal+links#Link+to+a+block+in+a+note) (only letters, digits, and hyphens; the `_` calibre sometimes puts in a uuid is replaced with `-`). Put `^{blockid}` at the end of a highlight's body so the highlight can be linked to or embedded individually.
 - {chaptertitle}: The title of the chapter (table of contents section) the highlight is in. For example, "1.1 The Basic Pigeon-Hole Principle". If the book has nested sections, the most specific (deepest) one is used. Slashes are replaced with hyphens so it can be used in note titles. This lets you make a note per chapter, e.g. a title of "Books/{title}/{chaptertitle}".
 - {format}: The book format the highlight is in, e.g. EPUB.
 - {color}: The highlight's color, e.g. "yellow". For decoration-style highlights (underline, etc.) this is the decoration name instead.
 - {colorlabel}: A custom label for the highlight's color, configured in the Formatting Options (map a color to text, e.g. "yellow = Important"). Falls back to the color name if no label is set. Useful for giving each color a meaning, e.g. a body of "{colorlabel}: {blockquote}".
+- {user}: The calibre user who made the highlight. Highlights made in the desktop viewer are "viewer"; highlights made through the content server use the web account's username. By default only your own highlights are sent, but you can enable "Send highlights from ALL users" in Other Options — then {user} lets you tell whose is whose, e.g. a body of "by {user}" or a title of "Books/{user}/{title}".
+- {usertype}: Whether the highlight was made locally in the desktop viewer ("local") or through the content server ("web").
 
 **Time Data:**
 - {date}: Date the highlight was made, formatted as YYYY-MM-DD.

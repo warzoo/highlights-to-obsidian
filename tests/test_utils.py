@@ -12,6 +12,7 @@ from calibre_plugins.highlights_to_obsidian.utils import (
     parse_send_time, parse_highlight_time, annotation_user, is_unsent_or_edited,
     note_path, write_note_to_file, native_open, parse_color_labels, parse_color_filter,
     yaml_safe, format_with, encode_sort_value, make_block, parse_note, merge_note, read_note_file,
+    process_conditional_blocks, obsidian_block_id,
     SEND_TIME_FORMAT, CALIBRE_TIME_FORMAT)
 
 
@@ -167,6 +168,39 @@ class TestMergeMode(unittest.TestCase):
     def test_read_note_file_missing_returns_empty(self):
         with tempfile.TemporaryDirectory() as d:
             self.assertEqual(read_note_file(d, "nope"), "")
+
+
+class TestConditionalBlocks(unittest.TestCase):
+    def test_kept_when_has_notes(self):
+        self.assertEqual(process_conditional_blocks("A{if_notes}B{end_if_notes}C", True), "ABC")
+
+    def test_removed_when_no_notes(self):
+        self.assertEqual(process_conditional_blocks("A{if_notes}B{end_if_notes}C", False), "AC")
+
+    def test_no_markers_unchanged(self):
+        self.assertEqual(process_conditional_blocks("plain {notes}", False), "plain {notes}")
+
+    def test_multiline_block_removed(self):
+        tmpl = "head\n{if_notes}\n### Notes\n{notes}\n{end_if_notes}\ntail"
+        self.assertNotIn("Notes", process_conditional_blocks(tmpl, False))
+
+    def test_collapses_blank_gap_left_behind(self):
+        out = process_conditional_blocks("A\n\n{if_notes}\nB\n{end_if_notes}\n\nC", False)
+        self.assertNotIn("\n\n\n", out)
+
+
+class TestObsidianBlockId(unittest.TestCase):
+    def test_underscores_become_hyphens(self):
+        self.assertEqual(obsidian_block_id("TlNlh8_I5VGK_abc"), "TlNlh8-I5VGK-abc")
+
+    def test_keeps_letters_digits_hyphens(self):
+        self.assertEqual(obsidian_block_id("AbC-123"), "AbC-123")
+
+    def test_other_chars_replaced(self):
+        self.assertEqual(obsidian_block_id("a.b/c d"), "a-b-c-d")
+
+    def test_empty(self):
+        self.assertEqual(obsidian_block_id(""), "")
 
 
 class TestNativeOpen(unittest.TestCase):

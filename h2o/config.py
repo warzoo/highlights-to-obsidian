@@ -48,6 +48,7 @@ prefs.defaults['use_max_note_size'] = True  # make max_note_size easy to toggle
 prefs.defaults['copy_header'] = False  # whether to copy header when splitting a too-big note
 prefs.defaults['web_user_name'] = "*"
 prefs.defaults['web_user'] = False  # whether we should send web user or local user's highlights
+prefs.defaults['send_all_users'] = False  # send every user's annotations, not just the single one above
 prefs.defaults['use_xdg_open'] = False
 prefs.defaults['sleep_secs'] = 0.1
 prefs.defaults['write_to_file'] = False  # write directly to vault files instead of using the obsidian:// URI
@@ -117,7 +118,9 @@ class FormattingDialog(QDialog):
         format_info = "<b>The following formatting options are available.</b> " + \
                       "To use one, put it in curly brackets, as in {title} or {blockquote}. " + \
                       "To make a value safe for Obsidian frontmatter (e.g. a title with ':'), " + \
-                      "add ':yaml', as in {title:yaml}."
+                      "add ':yaml', as in {title:yaml}. " + \
+                      "Wrap part of the body in {if_notes}...{end_if_notes} to include it only for " + \
+                      "highlights that have notes. Use ^{blockid} to add an Obsidian block id."
         self.note_format_label = QLabel(format_info, self)
         self.l.addWidget(self.note_format_label)
 
@@ -223,8 +226,9 @@ class FormattingDialog(QDialog):
             "timezone", "utcoffset",
             "url", "location", "timestamp",
             "totalsent", "booksent", "highlightsent",
-            "bookid", "uuid", "chaptertitle",
+            "bookid", "uuid", "blockid", "chaptertitle",
             "calibreid", "isbn", "lccn", "identifiers", "pubdate", "tags", "format", "color", "colorlabel",
+            "user", "usertype",
         ]
         f_opt_str = "'" + "', '".join(format_options) + "'"
 
@@ -412,6 +416,15 @@ class OtherConfigDialog(QDialog):
 
         self.l.addSpacing(self.spacing)
 
+        # send every user's annotations, or just the single user selected below
+        self.all_users_checkbox = QCheckBox(
+            "Send highlights from ALL users (by default, only your own — the single user selected "
+            "below — are sent; use the {user} option to label whose is whose)")
+        self.all_users_checkbox.setChecked(prefs['send_all_users'])
+        self.l.addWidget(self.all_users_checkbox)
+
+        self.l.addSpacing(self.spacing)
+
         # input for web user's name
         self.web_label = QLabel('<b>Web user\'s username</b> (if sending web user\'s highlights):', self)
         self.l.addWidget(self.web_label)
@@ -495,6 +508,7 @@ class OtherConfigDialog(QDialog):
         username = self.web_user_name_input.text()
         prefs['web_user_name'] = "*" if username == "" else username
         prefs['web_user'] = self.web_user_checkbox.isChecked()
+        prefs['send_all_users'] = self.all_users_checkbox.isChecked()
         prefs['use_custom_column'] = self.use_column_checkbox.isChecked()
         prefs['custom_column'] = self.custom_column_input.text().strip()
         prefs['use_xdg_open'] = self.native_open_checkbox.isChecked()

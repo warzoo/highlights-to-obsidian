@@ -221,10 +221,45 @@ class TestSortKey(unittest.TestCase):
         self.assertEqual(hs.format_sort_key({"location": "/8/4/2:0"}), (8, 4, 0, 0, 0, 0, 0, 0, 2, 0))
 
 
+class TestConditionalBodyAndBlockId(unittest.TestCase):
+    def test_if_notes_kept_when_highlight_has_notes(self):
+        dat = SafeDict(title="T", notes="my note", highlight="h")
+        out = format_data(dat, "{title}", "x{if_notes} N:{notes}{end_if_notes}", "")
+        self.assertEqual(out[1], "x N:my note")
+
+    def test_if_notes_removed_when_highlight_has_no_notes(self):
+        dat = SafeDict(title="T", notes="", highlight="h")
+        out = format_data(dat, "{title}", "x{if_notes} N:{notes}{end_if_notes}", "")
+        self.assertEqual(out[1], "x")
+
+    def test_blockid_sanitizes_uuid(self):
+        annot = {"highlighted_text": "x", "uuid": "ab_cd_12", "spine_index": 0, "start_cfi": "/2/2:0"}
+        d = make_highlight_format_dict({"book_id": 1, "format": "EPUB", "annotation": annot}, "Lib")
+        self.assertEqual(d["blockid"], "ab-cd-12")
+
+
+class TestUserFields(unittest.TestCase):
+    def annot(self):
+        return {"highlighted_text": "x", "uuid": "u", "spine_index": 0, "start_cfi": "/2/2:0"}
+
+    def test_user_and_usertype_present(self):
+        data = {"book_id": 1, "format": "EPUB", "user": "alice", "user_type": "web",
+                "annotation": self.annot()}
+        d = make_highlight_format_dict(data, "Lib")
+        self.assertEqual(d["user"], "alice")
+        self.assertEqual(d["usertype"], "web")
+
+    def test_user_defaults_empty_when_missing(self):
+        d = make_highlight_format_dict({"book_id": 1, "format": "EPUB", "annotation": self.annot()}, "Lib")
+        self.assertEqual(d["user"], "")
+        self.assertEqual(d["usertype"], "")
+
+
 class TestAllFormatKeys(unittest.TestCase):
     def test_includes_known_placeholders(self):
         keys = all_format_keys()
-        for k in ("location", "timestamp", "title", "color", "chaptertitle", "tags", "colorlabel"):
+        for k in ("location", "timestamp", "title", "color", "chaptertitle", "tags", "colorlabel",
+                  "blockid", "user", "usertype"):
             self.assertIn(k, keys)
 
 

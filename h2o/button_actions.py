@@ -80,7 +80,10 @@ def send_highlights(parent, db, condition=lambda x: True, update_send_time=True,
         else:
             """ all_annotations() and all_annotation_users()
              https://github.com/kovidgoyal/calibre/blob/master/src/calibre/db/cache.py """
-            user = annotation_user(prefs["web_user"], prefs["web_user_name"])
+            # by default only the selected single user's annotations are sent (your own). send_all_users
+            # pulls everyone's (restrict_to_user=None); use the {user}/{usertype} options to label whose
+            # is whose. uuids are unique per user, so dedup still works across users.
+            user = None if prefs["send_all_users"] else annotation_user(prefs["web_user"], prefs["web_user_name"])
             _sender.set_annotations_list(
                 db.all_annotations(restrict_to_user=user, restrict_to_book_ids=restrict_to_book_ids))
         return _sender

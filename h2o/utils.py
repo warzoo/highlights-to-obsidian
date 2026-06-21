@@ -84,6 +84,33 @@ def format_with(template: str, mapping) -> str:
     return _FORMATTER.vformat(template, (), mapping)
 
 
+def process_conditional_blocks(template: str, has_notes: bool) -> str:
+    """resolves {if_notes}...{end_if_notes} blocks in a body template.
+
+    when the highlight has notes, the markers are removed but the content between them is kept;
+    otherwise the whole block (markers and content) is removed. runs of 3+ newlines left behind by a
+    removed block are then collapsed to a single blank line so the note doesn't end up with an ugly
+    gap. templates without the marker are returned untouched.
+    """
+    if "{if_notes}" not in template:
+        return template
+    if has_notes:
+        template = template.replace("{if_notes}", "").replace("{end_if_notes}", "")
+    else:
+        template = re.sub(r"\{if_notes\}.*?\{end_if_notes\}", "", template, flags=re.DOTALL)
+    return re.sub(r"\n{3,}", "\n\n", template)
+
+
+def obsidian_block_id(uuid: str) -> str:
+    """turns a calibre highlight uuid into a string usable as an Obsidian block id (the part after a
+    '^'). Obsidian only allows letters, digits, and hyphens in a block id, so every other character
+    -- notably the '_' that appears in some calibre uuids, which otherwise breaks the ^block
+    reference -- is replaced with a hyphen. Put ^{blockid} at the end of a highlight body to make it
+    individually linkable.
+    """
+    return re.sub(r"[^A-Za-z0-9-]", "-", uuid or "")
+
+
 def parse_color_labels(text: str) -> Dict[str, str]:
     """parses lines of 'color = label' into a {color: label} dict for the {colorlabel} option.
 
