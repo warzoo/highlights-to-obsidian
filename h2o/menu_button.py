@@ -1,6 +1,5 @@
 from functools import partial
 from calibre.gui2.actions import InterfaceAction
-from calibre_plugins.highlights_to_obsidian.main import MainDialog
 import calibre_plugins.highlights_to_obsidian.button_actions as b_acts
 
 
@@ -12,7 +11,7 @@ class MenuButton(InterfaceAction):
     # If you pass an empty tuple, then the shortcut is registered with no default key binding.
     # to add more actions, call self.create_action() with one a tuple of this format as input
     action_spec = ('H2O', None,
-                   'Highlights to Obsidian Menu', None)
+                   'Send new highlights to Obsidian (use the dropdown for more options)', None)
 
     def __init__(self, parent, site_customization):
         super().__init__(parent, site_customization)
@@ -44,7 +43,9 @@ class MenuButton(InterfaceAction):
         # The qaction is automatically created from the action_spec defined
         # above
         self.qaction.setIcon(icon)
-        self.qaction.triggered.connect(self.show_dialog)
+        # Clicking the toolbar button sends new highlights directly. The full set of actions
+        # is still available from the button's dropdown menu (built below).
+        self.qaction.triggered.connect(self.send_new)
 
         # action specs are of the form: (text, icon_path, tooltip, keyboard shortcut).
         ma = partial(self.create_menu_action, self.qaction.menu())
@@ -71,14 +72,6 @@ class MenuButton(InterfaceAction):
         self.user_config_action = ma(un + "Config", "Config", description=ocd, shortcut=False, triggered=self.open_config)
         hd = "Open help menu for Highlights to Obsidian"
         self.open_help_action = ma(un + "Help", "Help", description=hd, shortcut=False, triggered=self.open_help)
-
-    def show_dialog(self):
-        # The base plugin object defined in __init__.py
-        base_plugin_object = self.interface_action_base_plugin
-        do_user_config = base_plugin_object.do_user_config
-
-        d = MainDialog(self.gui, self.qaction.icon(), do_user_config)
-        d.show()
 
     def send_new(self):
         b_acts.send_new_highlights(self.gui, self.gui.current_db.new_api)

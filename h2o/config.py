@@ -41,7 +41,6 @@ prefs.defaults['last_send_time'] = time.strftime(SEND_TIME_FORMAT, time.gmtime(1
 prefs.defaults['prev_send'] = None  # deprecated; kept so old configs don't error
 prefs.defaults['sent_highlights'] = {}  # {highlight uuid: timestamp} of highlights already sent
 prefs.defaults['last_batch_uuids'] = []  # uuids sent in the most recent "send new" batch (for resend)
-prefs.defaults['display_help_on_menu_open'] = True
 prefs.defaults['confirm_send_all'] = True  # confirmation dialog when sending all highlights
 prefs.defaults['highlights_sent_dialog'] = True  # show popup with how many highlights were sent
 prefs.defaults['max_note_size'] = "20000"
