@@ -11,6 +11,7 @@ _calibre_stub.install()
 from calibre_plugins.highlights_to_obsidian.highlight_sender import (
     format_data, format_single, make_highlight_format_dict, make_book_format_dict,
     all_format_keys, BookData, BookList, HighlightSender, SafeDict)
+from calibre_plugins.highlights_to_obsidian.exceptions import H2OConfigError
 
 
 def make_highlight(uuid="u1", timestamp="2022-09-10T20:32:08.820Z", text="hello",
@@ -292,12 +293,12 @@ class TestSendToFile(unittest.TestCase):
     def test_missing_vault_path_raises(self):
         s = self.build_sender(os.path.join(tempfile.gettempdir(), "does-not-exist-h2o"),
                               [make_highlight()])
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(H2OConfigError):
             s.send()
 
     def test_empty_vault_path_raises_with_field_hint(self):
         s = self.build_sender("", [make_highlight()])
-        with self.assertRaises(RuntimeError) as ctx:
+        with self.assertRaises(H2OConfigError) as ctx:
             s.send()
         # the message should point at the right field, not the vault name
         self.assertIn("Vault folder path", str(ctx.exception))

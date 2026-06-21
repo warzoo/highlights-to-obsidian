@@ -7,6 +7,9 @@ from calibre_plugins.highlights_to_obsidian.utils import (parse_send_time, parse
                                                           annotation_user, is_unsent_or_edited,
                                                           parse_color_labels, parse_color_filter,
                                                           SEND_TIME_FORMAT)
+from calibre_plugins.highlights_to_obsidian.exceptions import (H2OError, H2OConfigError,
+                                                               H2OURIError, H2OWriteError)
+from calibre_plugins.highlights_to_obsidian.log import get_logger
 from time import strftime, gmtime
 
 
@@ -88,15 +91,39 @@ def send_highlights(parent, db, condition=lambda x: True, update_send_time=True,
                 db.all_annotations(restrict_to_user=user, restrict_to_book_ids=restrict_to_book_ids))
         return _sender
 
+    logger = get_logger()
     sender = make_sender()
+    logger.info("sending highlights: write_to_file=%s, merge=%s, custom_column=%s",
+                prefs["write_to_file"], prefs["merge_notes"], use_column)
     try:
         if use_column:
             amt = sender.send_columns(book_column_contents(db, restrict_to_book_ids))
         else:
             amt = sender.send(condition=condition)
-    except Exception as e:
+    except H2OConfigError as e:
+        logger.exception("send failed: configuration problem")
+        error_dialog(parent, "Highlights to Obsidian: Configuration problem", str(e), show=True)
+        return 0
+    except H2OWriteError as e:
+        logger.exception("send failed: couldn't write to the vault folder")
+        error_dialog(parent, "Highlights to Obsidian: Couldn't write to the vault folder", str(e), show=True)
+        return 0
+    except H2OURIError as e:
+        logger.exception("send failed: obsidian URI error")
+        error_dialog(parent, "Highlights to Obsidian: Couldn't send via the Obsidian URI", str(e), show=True)
+        return 0
+    except H2OError as e:
+        logger.exception("send failed")
         error_dialog(parent, "Highlights to Obsidian: Error sending highlights", str(e), show=True)
         return 0
+    except Exception as e:
+        logger.exception("send failed: unexpected error")
+        error_dialog(parent, "Highlights to Obsidian: Unexpected error",
+                     f"{e}\n\nSee calibre's debug log (run 'calibre-debug -g') for the full traceback.",
+                     show=True)
+        return 0
+
+    logger.info("sent %d highlight(s)/note(s)", amt)
 
     if amt > 0:
         if use_column:

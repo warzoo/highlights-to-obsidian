@@ -8,6 +8,8 @@ from calibre_plugins.highlights_to_obsidian.config import prefs
 from calibre_plugins.highlights_to_obsidian.utils import (write_note_to_file, native_open, format_with,
                                                           make_block, merge_note, read_note_file,
                                                           process_conditional_blocks, obsidian_block_id)
+from calibre_plugins.highlights_to_obsidian.exceptions import (H2OError, H2OConfigError,
+                                                               H2OURIError, H2OWriteError)
 
 # besides config.prefs (used only in HighlightSender.__init__) and the pure helpers in utils.py,
 # avoid importing anything from calibre or the rest of this plugin here. this keeps references to
@@ -32,11 +34,11 @@ def send_item_to_obsidian(obsidian_data: Dict[str, str]) -> None:
         else:
             webbrowser.open(uri)
     except (ValueError, OSError) as e:
-        raise ValueError(f" send_item_to_obsidian: '{e}' in note '{obsidian_data['file']}'.\n\n"
-                         f"If this error says that the filepath is too long, try reducing the max file size in "
-                         f"the Highlights to Obsidian config, or enable 'write highlights directly to vault files' "
-                         f"(the path length that caused this error is {len(uri)}. "
-                         f"The path size will be larger than the max file size due to URL encoding).")
+        raise H2OURIError(f" send_item_to_obsidian: '{e}' in note '{obsidian_data['file']}'.\n\n"
+                          f"If this error says that the filepath is too long, try reducing the max file size in "
+                          f"the Highlights to Obsidian config, or enable 'write highlights directly to vault files' "
+                          f"(the path length that caused this error is {len(uri)}. "
+                          f"The path size will be larger than the max file size due to URL encoding).")
 
 
 def remove_slashes(text: str) -> str:
@@ -447,8 +449,8 @@ class BookData:
             if len(self.notes[idx][0]) + len(header) > max_size:
                 # this handles the case of when the header + a single note is bigger than max note size. also catches
                 # cases where the note by itself is too long.
-                raise RuntimeError(f"NOTE EXCEEDS MAX LENGTH OF {max_size} CHARACTERS: "
-                                   f"'{self.title[:30]}', NOTE TEXT: '{self.notes[idx][0][:500]}'")
+                raise H2OError(f"NOTE EXCEEDS MAX LENGTH OF {max_size} CHARACTERS: "
+                               f"'{self.title[:30]}', NOTE TEXT: '{self.notes[idx][0][:500]}'")
 
             if note_size + len(self.notes[idx][0]) > max_size:
                 title = self.title if _sent == 0 else self.title + f" ({_sent})"
@@ -824,13 +826,13 @@ class HighlightSender:
         if not self.write_to_file:
             return
         if not self.vault_path.strip():
-            raise RuntimeError(
+            raise H2OConfigError(
                 "Can't write highlights to files: the 'Vault folder path' is empty.\n\n"
                 "In the config's Other Options, set 'Vault folder path' to the full path of your vault "
                 "folder, e.g. /Users/you/Documents/MyVault. This is a different field from the 'Obsidian "
                 "vault name' (which is only used when NOT writing directly to files).")
         if not os.path.isdir(self.vault_path):
-            raise RuntimeError(
+            raise H2OConfigError(
                 f"Can't write highlights to files: the vault folder '{self.vault_path}' doesn't exist.\n\n"
                 f"Check 'Vault folder path' in the config's Other Options (it should be the full folder "
                 f"path, e.g. /Users/you/Documents/MyVault), or turn off 'write highlights directly to "
@@ -843,7 +845,10 @@ class HighlightSender:
         :param append: if True, append to an existing note; if False, overwrite it (used by
         custom-column mode so re-sending refreshes a note instead of duplicating it)."""
         if self.write_to_file:
-            write_note_to_file(self.vault_path, note_file, note_content, append=append)
+            try:
+                write_note_to_file(self.vault_path, note_file, note_content, append=append)
+            except OSError as e:
+                raise H2OWriteError(f"Couldn't write note '{note_file}' to the vault folder: {e}") from e
         else:
             data = self.make_obsidian_data(note_file, note_content)
             if not append:
@@ -905,9 +910,12 @@ class HighlightSender:
 
         count = 0
         for title, data in notes.items():
-            existing = read_note_file(self.vault_path, title)
-            merged = merge_note(existing, data["header"], data["blocks"])
-            write_note_to_file(self.vault_path, title, merged, append=False)
+            try:
+                existing = read_note_file(self.vault_path, title)
+                merged = merge_note(existing, data["header"], data["blocks"])
+                write_note_to_file(self.vault_path, title, merged, append=False)
+            except OSError as e:
+                raise H2OWriteError(f"Couldn't write note '{title}' to the vault folder: {e}") from e
             count += len(data["blocks"])
         return count
 
