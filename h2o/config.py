@@ -4,7 +4,8 @@ from qt.core import (QWidget, QVBoxLayout, QLabel, QLineEdit, QPlainTextEdit,
                      QPushButton, QDialog, QDialogButtonBox, QCheckBox)
 from calibre.gui2 import warning_dialog
 from calibre.utils.config import JSONConfig
-from calibre_plugins.highlights_to_obsidian.utils import parse_send_time, SEND_TIME_FORMAT
+from calibre_plugins.highlights_to_obsidian.utils import (parse_send_time, vault_name_looks_like_path,
+                                                          SEND_TIME_FORMAT)
 from calibre_plugins.highlights_to_obsidian.__init__ import version
 
 # This is where all preferences for this plugin will be stored
@@ -481,6 +482,20 @@ class OtherConfigDialog(QDialog):
         prefs['vault_name'] = self.vault_input.text()
         prefs['write_to_file'] = self.write_to_file_checkbox.isChecked()
         prefs['vault_path'] = self.vault_path_input.text()
+
+        # warn if the "vault name" looks like a folder path -- a common mistake that makes Obsidian
+        # raise "Vault not found". only relevant in URI mode; when writing directly to files the vault
+        # name is ignored (the "Vault folder path" field is used instead), so don't nag in that case.
+        if not prefs['write_to_file']:
+            suggested = vault_name_looks_like_path(prefs['vault_name'])
+            if suggested:
+                warning_dialog(self, "Vault name looks like a path",
+                               f'The "Obsidian vault name" looks like a folder path, which makes Obsidian '
+                               f'report "Vault not found". It should be just the vault name shown in '
+                               f"Obsidian's bottom-left corner (the folder that contains .obsidian) -- "
+                               f'probably "{suggested}".\n\n'
+                               f"If you'd rather give the full folder path, enable 'Write highlights directly "
+                               f"to vault files' and put the path in 'Vault folder path' instead.", show=True)
         prefs['merge_notes'] = self.merge_notes_checkbox.isChecked()
         prefs['color_filter'] = self.color_filter_input.text()
 

@@ -136,6 +136,24 @@ def parse_color_filter(text: str) -> List[str]:
     return [c.strip().lower() for c in text.split(",") if c.strip()]
 
 
+def vault_name_looks_like_path(vault_name: str):
+    """if the configured Obsidian vault name looks like a filesystem path, return the likely-correct
+    vault name (the last path component); otherwise return None.
+
+    a common misconfiguration is pasting the vault's folder path (e.g. "D:/Docs/My Vault") into the
+    "Obsidian vault name" field. that makes Obsidian raise "Vault not found", because the vault name
+    is the short name shown in Obsidian's bottom-left corner (the folder that contains .obsidian),
+    not a path. path separators ('/' or '\\') or a Windows drive colon are the giveaway.
+
+    e.g. "D:\\Docs\\My Vault" -> "My Vault", "My Vault" -> None.
+    """
+    name = (vault_name or "").strip()
+    if not any(c in name for c in "/\\:"):
+        return None
+    basename = name.replace("\\", "/").rstrip("/").rsplit("/", 1)[-1].strip()
+    return basename or None
+
+
 def note_path(vault_path: str, note_file: str) -> str:
     """builds the absolute .md path for a note inside the vault.
 
