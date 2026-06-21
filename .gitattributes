@@ -1,2 +1,8 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Keep dev-only files out of GitHub's source archives (git archive honors export-ignore).
+# The installable plugin is built by build.py (which packages only h2o/); these are for developers.
+tests/         export-ignore
+.gitignore     export-ignore
+.gitattributes export-ignore
