@@ -12,7 +12,7 @@ from calibre_plugins.highlights_to_obsidian.utils import (
     parse_send_time, parse_highlight_time, annotation_user, is_unsent_or_edited,
     note_path, write_note_to_file, native_open, parse_color_labels, parse_color_filter,
     yaml_safe, format_with, encode_sort_value, make_block, parse_note, merge_note, read_note_file,
-    process_conditional_blocks, obsidian_block_id, vault_name_looks_like_path,
+    process_conditional_blocks, obsidian_block_id, obsidian_heading_text, vault_name_looks_like_path,
     template_path, read_template,
     SEND_TIME_FORMAT, CALIBRE_TIME_FORMAT)
 
@@ -202,6 +202,22 @@ class TestObsidianBlockId(unittest.TestCase):
 
     def test_empty(self):
         self.assertEqual(obsidian_block_id(""), "")
+
+
+class TestObsidianHeadingText(unittest.TestCase):
+    def test_plain_title_unchanged(self):
+        self.assertEqual(obsidian_heading_text("Chapter 1"), "Chapter 1")
+
+    def test_strips_link_breaking_chars(self):
+        # '#', '|', '^', '[', ']' would break or split an [[#heading]] link
+        self.assertEqual(obsidian_heading_text("Ch [1] #intro | ^x"), "Ch 1 intro x")
+
+    def test_collapses_whitespace_and_newlines(self):
+        self.assertEqual(obsidian_heading_text("  A\n\tB   C  "), "A B C")
+
+    def test_empty_when_nothing_usable(self):
+        self.assertEqual(obsidian_heading_text(""), "")
+        self.assertEqual(obsidian_heading_text("[]#^|"), "")
 
 
 class TestNativeOpen(unittest.TestCase):

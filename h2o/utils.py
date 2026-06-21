@@ -111,6 +111,19 @@ def obsidian_block_id(uuid: str) -> str:
     return re.sub(r"[^A-Za-z0-9-]", "-", uuid or "")
 
 
+def obsidian_heading_text(title: str) -> str:
+    """sanitize a chapter title so it works as a markdown heading that an in-note '[[#heading]]' link
+    can point to. drops the characters Obsidian treats specially inside a heading reference ('#', '|',
+    '^', '[', ']') and collapses runs of whitespace/newlines to single spaces, so the rendered
+    '## heading' and the '[[#heading]]' link in the table of contents come out identical and the link
+    resolves. returns '' when nothing usable is left (e.g. the highlight had no chapter info).
+    """
+    cleaned = title or ""
+    for c in "#|^[]":
+        cleaned = cleaned.replace(c, "")
+    return " ".join(cleaned.split())
+
+
 def parse_color_labels(text: str) -> Dict[str, str]:
     """parses lines of 'color = label' into a {color: label} dict for the {colorlabel} option.
 

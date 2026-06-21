@@ -104,7 +104,8 @@ Commonly used placeholders / 常用占位符:
 | `{blockquote}` | the highlight as a `>` blockquote | 原文转成 `>` 引用块 |
 | `{notes}` | your note on the highlight | 你对该高亮的批注 |
 | `{url}` | a `calibre://` link back to the highlight | 跳回 calibre 原文的链接 |
-| `{chaptertitle}` | the chapter/section the highlight is in | 高亮所在章节 |
+| `{chaptertitle}` | the chapter/section the highlight is in | 高亮所在章节(最细一级) |
+| `{topchapter}` | the first-level (broadest) chapter | 高亮所在的第一级(最顶层)章节 |
 | `{color}` `{colorlabel}` | highlight color / its custom label | 高亮颜色 / 你给它配的标签 |
 | `{date}` `{time}` `{datetime}` | when the highlight was made (UTC) | 高亮时间(UTC) |
 | `{blockid}` | uuid sanitized for an Obsidian `^block` id | 适合做 Obsidian `^块id` 的 uuid |
@@ -182,6 +183,42 @@ Note template file** 填一个相对 vault 的路径,如 `Reference/Templates/Bo
 笔记的 header/骨架,里面同样的 `{占位符}` 会被填充——正好用来放上面的 frontmatter。它需要设置
 **Vault folder path**(Other Options)才能找到文件;只在笔记创建时套用一次;用的是 H2O 的 `{占位符}`
 语法(不是 Obsidian/Templater 的 `{{...}}` 或 `<% %>`——H2O 无法运行 Obsidian 自己的模板插件)。
+
+### Group by chapter / 按章节分组 + 目录
+
+Tick **Config → Formatting Options → "Group highlights by first-level chapter, with a clickable table
+of contents"** to turn each book into one note where the highlights are grouped under `## chapter`
+headings (the book's first-level table-of-contents sections). A list of `[[#chapter]]` links is added
+at the top, and clicking one jumps to that chapter further down the note. Set the **Table-of-contents
+heading** to the label above those links, e.g. `## Contents` or `## 目录` (empty = no link list). The
+in-note links only work when the whole book is one file, so use this with **Write highlights directly
+to vault files** (the max note size is then ignored and the note isn't split), and sort by `location`
+so chapters stay in reading order. It isn't combined with merge mode (grouping wins if both are on),
+and re-sending appends a fresh table of contents — so it's best when you send a book's highlights
+together. The resulting note looks like:
+
+勾选 **Config → Formatting Options → "Group highlights by first-level chapter, with a clickable table
+of contents"**,整本书会变成一篇笔记:高亮按 `## 章节` 标题分组(章节取书目录的**第一级**),笔记
+顶部生成一串 `[[#章节]]` 链接,点一下就跳到下面对应的章节。**Table-of-contents heading** 填目录上方
+的标题,如 `## Contents` 或 `## 目录`(留空则不生成链接列表)。笔记内跳转只有在整本书是同一个文件时
+才有效,所以请配合 **Write highlights directly to vault files** 使用(此时忽略最大笔记长度、不再切分),
+并把排序键设为 `location` 让章节按阅读顺序排列。它不与合并模式叠加(两者都开时以分组为准);重复发送会
+再追加一份目录,所以最好一次性发送一本书的高亮。生成的笔记大致是:
+
+```markdown
+## 目录
+- [[#第一章 绪论]]
+- [[#第二章 方法]]
+
+## 第一章 绪论
+> 第一条高亮原文
+我的批注…
+
+---
+
+## 第二章 方法
+> 另一条高亮
+```
 
 ---
 

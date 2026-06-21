@@ -55,6 +55,8 @@ prefs.defaults['sleep_secs'] = 0.1
 prefs.defaults['write_to_file'] = False  # write directly to vault files instead of using the obsidian:// URI
 prefs.defaults['vault_path'] = ""  # filesystem path to the obsidian vault, required when write_to_file is True
 prefs.defaults['merge_notes'] = False  # insert highlights in sorted position, preserving edits (file mode)
+prefs.defaults['group_by_chapter'] = False  # group a book's highlights under first-level chapter headings + TOC
+prefs.defaults['chapter_toc_title'] = "## Contents"  # heading shown above the clickable chapter links
 prefs.defaults['color_labels'] = ""  # newline-separated "color = label" mappings for {colorlabel}
 prefs.defaults['color_filter'] = ""  # comma-separated colors to send; empty = send all colors
 prefs.defaults['use_custom_column'] = False  # read annotations from a custom column instead of calibre's own
@@ -213,6 +215,36 @@ class FormattingDialog(QDialog):
 
         self.l.addSpacing(self.spacing)
 
+        # group a book's highlights under first-level chapter headings, with a clickable table of contents
+        self.group_chapter_checkbox = QCheckBox(
+            "Group highlights by first-level chapter, with a clickable table of contents at the top")
+        self.group_chapter_checkbox.setChecked(prefs['group_by_chapter'])
+        self.l.addWidget(self.group_chapter_checkbox)
+
+        self.group_chapter_label = QLabel(
+            "Each book becomes one note: highlights are grouped under <code>## chapter</code> headings "
+            "(the book's first-level table-of-contents sections), and a list of <code>[[#chapter]]</code> "
+            "links at the top jumps to each section.<br/>"
+            "Works best with <b>Write highlights directly to vault files</b> (Other Options) — the "
+            "in-note links need the whole book in one file, so the max note size is ignored and the note "
+            "isn't split. Sort by <i>location</i> to keep chapters in reading order. Not combined with "
+            "merge mode (grouping takes over if both are on).", self)
+        self.group_chapter_label.setWordWrap(True)
+        self.l.addWidget(self.group_chapter_label)
+
+        self.toc_title_label = QLabel(
+            "<b>Table-of-contents heading</b> (printed above the chapter links; e.g. "
+            "<code>## Contents</code> or <code>## 目录</code>; leave empty to skip the link list):", self)
+        self.toc_title_label.setWordWrap(True)
+        self.l.addWidget(self.toc_title_label)
+        self.toc_title_input = QLineEdit(self)
+        self.toc_title_input.setText(prefs['chapter_toc_title'])
+        self.toc_title_input.setPlaceholderText("## Contents")
+        self.l.addWidget(self.toc_title_input)
+        self.toc_title_label.setBuddy(self.toc_title_input)
+
+        self.l.addSpacing(self.spacing)
+
         # per-color labels for the {colorlabel} option
         self.color_labels_label = QLabel(
             "<b>Highlight color labels</b> (optional): map a color to text for the {colorlabel} option, "
@@ -248,7 +280,7 @@ class FormattingDialog(QDialog):
             "timezone", "utcoffset",
             "url", "location", "timestamp",
             "totalsent", "booksent", "highlightsent",
-            "bookid", "uuid", "blockid", "chaptertitle",
+            "bookid", "uuid", "blockid", "chaptertitle", "topchapter",
             "calibreid", "isbn", "lccn", "identifiers", "pubdate", "tags", "format", "color", "colorlabel",
             "user", "usertype",
         ]
@@ -283,6 +315,8 @@ class FormattingDialog(QDialog):
         prefs['no_notes_format'] = self.no_notes_format_input.toPlainText()
         prefs['header_format'] = self.header_format_input.toPlainText()
         prefs['use_header'] = self.header_checkbox.isChecked()
+        prefs['group_by_chapter'] = self.group_chapter_checkbox.isChecked()
+        prefs['chapter_toc_title'] = self.toc_title_input.text()
         prefs['color_labels'] = self.color_labels_input.toPlainText()
 
         # validate the template file (if set) against the saved vault path, so the user finds out now

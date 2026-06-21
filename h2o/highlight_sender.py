@@ -7,7 +7,8 @@ import datetime
 from calibre_plugins.highlights_to_obsidian.config import prefs
 from calibre_plugins.highlights_to_obsidian.utils import (write_note_to_file, native_open, format_with,
                                                           make_block, merge_note, read_note_file,
-                                                          process_conditional_blocks, obsidian_block_id)
+                                                          process_conditional_blocks, obsidian_block_id,
+                                                          obsidian_heading_text)
 from calibre_plugins.highlights_to_obsidian.exceptions import (H2OError, H2OConfigError,
                                                                H2OURIError, H2OWriteError)
 
@@ -193,10 +194,17 @@ def make_highlight_format_dict(data: Dict, calibre_library: str, color_labels: D
     }
 
     # calibre records the table-of-contents section titles the highlight falls under, ordered broad
-    # to narrow. use the most specific (last) one as the chapter title, with slashes removed so it's
-    # safe inside a note title/path (the same handling {title} gets).
+    # to narrow. {chaptertitle} uses the most specific (last) one; {topchapter} uses the first-level
+    # (first/broadest) one, e.g. "Part I" / "Chapter 1", which is what the chapter-grouping feature
+    # buckets highlights by. both have slashes removed so they're safe inside a note title/path (the
+    # same handling {title} gets).
     toc_titles = annot.get("toc_family_titles") or []
-    chapter_title = (str(toc_titles[-1]) if toc_titles else "").replace("/", "-").replace("\\", "-")
+
+    def _toc_safe(value: str) -> str:
+        return str(value).replace("/", "-").replace("\\", "-")
+
+    chapter_title = _toc_safe(toc_titles[-1]) if toc_titles else ""
+    top_chapter = _toc_safe(toc_titles[0]) if toc_titles else ""
 
     # highlight style, e.g. {"kind": "color", "type": "builtin", "which": "yellow"}. "which" holds the
     # color name for color highlights (or the decoration name, e.g. "wavy", for decoration highlights).
@@ -213,6 +221,7 @@ def make_highlight_format_dict(data: Dict, calibre_library: str, color_labels: D
         "uuid": annot["uuid"],  # highlight's ID in calibre
         "blockid": obsidian_block_id(annot["uuid"]),  # uuid sanitized for use as an Obsidian ^block id
         "chaptertitle": chapter_title,  # most specific table-of-contents section title
+        "topchapter": top_chapter,  # first-level (broadest) table-of-contents section title
         "format": data.get("format", ""),  # the book format the highlight is in, e.g. EPUB
         "color": color,  # highlight color (or decoration style)
         "colorlabel": color_label,  # user-configured label for this color (falls back to the color)
@@ -356,7 +365,9 @@ class BookData:
 
         :param title: book's title
         :param header: header to be used when notes are sent to Obsidian
-        :param notes: list of [note_content, sort_key]
+        :param notes: list of [note_content, sort_key] or [note_content, sort_key, chapter]. the
+         optional third element is the highlight's first-level chapter, used only by the
+         chapter-grouping output (make_grouped_note); the merge/split paths ignore it.
         """
 
         self._title = title
@@ -390,13 +401,15 @@ class BookData:
     def header(self, header: str) -> None:
         self._header = header
 
-    def add_note(self, note: str, sort_key: Any = None) -> None:
+    def add_note(self, note: str, sort_key: Any = None, chapter: str = None) -> None:
         """
         :param note: text of note to add to this book's notes
         :param sort_key: sort key to use when merging book's notes into a single string
+        :param chapter: the highlight's first-level chapter title, used by make_grouped_note to
+         bucket notes under chapter headings. ignored by the normal/merge/split output paths.
         :return: none
         """
-        self.insort_note([note, sort_key])
+        self.insort_note([note, sort_key, chapter])
 
     def update_note(self, idx: int, new_note: str) -> None:
         self.notes[idx][0] = new_note
@@ -468,6 +481,45 @@ class BookData:
         header = self.header if copy_header or _sent == 0 else ""
         yield title, header + _accum
 
+    def make_grouped_note(self, toc_title: str = "## Contents") -> Tuple[str, str]:
+        """builds a single note for this book with its highlights grouped under "## chapter" headings
+        and a clickable table of contents at the top (Obsidian "[[#heading]]" links that jump to each
+        heading further down the same note).
+
+        chapters appear in the order their first highlight does, so sorting highlights by {location}
+        lays them out in reading order. highlights whose book has no table-of-contents info are
+        rendered with no heading (so a book without a TOC just looks like a normal note). unlike
+        make_sendable_notes this never splits the note -- the in-note links only resolve when the
+        whole book is one file, so this is meant for the write-to-file output method.
+
+        :param toc_title: the heading printed above the list of chapter links (e.g. "## Contents").
+         if empty, the list of links is omitted but the chapter headings are still inserted.
+        :return: a single (title, body) tuple for the whole book.
+        """
+        groups: List[List[Any]] = []  # [heading_text, [body, ...]], in first-appearance order
+        position: Dict[str, int] = {}  # heading_text -> index in groups (also dedups repeat chapters)
+        for note in self.notes:
+            chapter = note[2] if len(note) > 2 else None
+            heading = obsidian_heading_text(str(chapter or ""))
+            if heading not in position:
+                position[heading] = len(groups)
+                groups.append([heading, []])
+            groups[position[heading]][1].append(note[0])
+
+        chapters = [g[0] for g in groups if g[0]]  # non-empty chapter headings, in order
+        toc = ""
+        if toc_title and chapters:
+            toc = (toc_title if toc_title.endswith("\n") else toc_title + "\n")
+            toc += "".join(f"- [[#{h}]]\n" for h in chapters) + "\n"
+
+        body = []
+        for heading, bodies in groups:
+            if heading:
+                body.append(f"## {heading}\n")
+            body.append("".join(bodies))
+
+        return self.title, (self.header or "") + toc + "".join(body)
+
 
 class BookList(dict):
     # todo: refactor: make a BookData class to store data of book title(s), highlight, length, count, etc
@@ -492,7 +544,7 @@ class BookList(dict):
         """
         self[book.title] = book
 
-    def add_note(self, title: str, note: str, sort_key: Any = 0) -> None:
+    def add_note(self, title: str, note: str, sort_key: Any = 0, chapter: str = None) -> None:
         """
         adds a note to this book list. if the title already exists, the note is added to the appropriate BookData.
         otherwise, a new BookData will be created.
@@ -500,13 +552,14 @@ class BookList(dict):
         :param title: title of the note being added
         :param note: contents of the note being added
         :param sort_key: used to sort the note within its file when sending to obsidian
+        :param chapter: the highlight's first-level chapter, used only by make_grouped_notes
         :return: none
         """
         if title in self:
-            self[title].add_note(note, sort_key)
+            self[title].add_note(note, sort_key, chapter)
         else:
             b = BookData(title)
-            b.add_note(note, sort_key)
+            b.add_note(note, sort_key, chapter)
             self[title] = b
 
     def update_title(self, old_title: str, new_title: str) -> None:
@@ -540,6 +593,12 @@ class BookList(dict):
         for b in self:
             for n in self[b].make_sendable_notes(max_size, copy_header):
                 yield n
+
+    def make_grouped_notes(self, toc_title: str = "## Contents") -> Iterable[Tuple[str, str]]:
+        """yields one (title, body) per book, with highlights grouped under chapter headings and a
+        clickable table of contents (see BookData.make_grouped_note). notes are never split."""
+        for b in self:
+            yield self[b].make_grouped_note(toc_title)
 
     def apply_sent_amount_format(self, should_apply: Tuple[bool, bool, bool]) -> None:
         """
@@ -604,6 +663,8 @@ class HighlightSender:
         self.color_labels = {}  # {color: label} for the {colorlabel} option
         self.color_filter = []  # lowercased color names; if non-empty, only these colors are sent
         self.merge_notes = False  # insert highlights in sorted position, preserving edits (file mode)
+        self.group_by_chapter = False  # group each book's highlights under first-level chapter headings
+        self.toc_title = "## Contents"  # heading printed above the clickable table of contents
         self.template = ""  # vault template-file content used as each note's header/scaffold (see set_template)
         # uuid -> highlight timestamp for the highlights sent by the most recent send() call
         self.sent_highlights = {}
@@ -637,6 +698,18 @@ class HighlightSender:
         position, updating existing highlights in place and preserving the user's manual edits, instead
         of being appended at the bottom. has no effect unless write_to_file is also enabled."""
         self.merge_notes = merge_notes
+
+    def set_group_by_chapter(self, group_by_chapter: bool):
+        """if True, each book's highlights are grouped under "## first-level chapter" headings with a
+        clickable table of contents at the top of the note (see BookData.make_grouped_note). designed
+        for the write-to-file output (the in-note links need the whole book in one file). takes
+        precedence over merge mode when both are enabled."""
+        self.group_by_chapter = group_by_chapter
+
+    def set_toc_title(self, toc_title: str):
+        """the heading printed above the chapter table of contents, e.g. "## Contents" or "## 目录".
+        if empty, the chapter links are omitted but the chapter headings are still inserted."""
+        self.toc_title = toc_title if toc_title is not None else ""
 
     def set_title_format(self, title_format: str):
         self.title_format = title_format
@@ -818,15 +891,16 @@ class HighlightSender:
 
         return True
 
-    def process_highlight(self, _highlight, _headers: List[str]) -> Tuple[str, Tuple[str, Any], str]:
+    def process_highlight(self, _highlight, _headers: List[str]) -> Tuple[str, Tuple[str, Any], str, str]:
         """
         makes formatted data for a highlight.
 
         :param _highlight: a calibre annotation object
         :param _headers: list of titles that already have headers
-        :return: (formatted_title, formatted_body, formatted_header)
+        :return: (formatted_title, formatted_body, formatted_header, chapter)
         formatted_body is a tuple with (formatted_text, sort_key)
         formatted_header is None if a header is already present in _headers.
+        chapter is the highlight's first-level chapter title (used only by chapter grouping).
         """
         dat = make_format_dict(_highlight, self.library_name, self.book_titles_authors, self.color_labels)
         formatted = format_data(dat, self.title_format, self.body_format, self.no_notes_format)
@@ -834,7 +908,7 @@ class HighlightSender:
         # only make one header per title
         header = None if formatted[0] in _headers else format_single(dat, self.header_template())
 
-        return formatted[0], (formatted[1], self.format_sort_key(dat)), header
+        return formatted[0], (formatted[1], self.format_sort_key(dat)), header, dat["topchapter"]
 
     def _require_vault_dir(self) -> None:
         """when writing to files, make sure the vault folder path is set and exists; otherwise raise a
@@ -943,7 +1017,9 @@ class HighlightSender:
 
         highlights = filter(lambda x: self.is_valid_highlight(x, condition), self.annotations_list)
 
-        if self.write_to_file and self.merge_notes:
+        # chapter grouping rebuilds the whole note (toc + headings), which is incompatible with
+        # merge mode's in-place block editing, so grouping takes precedence when both are enabled.
+        if self.write_to_file and self.merge_notes and not self.group_by_chapter:
             return self._send_merge(highlights)
 
         headers = []  # titles that already have a header
@@ -955,15 +1031,22 @@ class HighlightSender:
             annot = highlight["annotation"]
             self.sent_highlights[annot["uuid"]] = annot["timestamp"]
             h = self.process_highlight(highlight, headers)
-            books.add_note(h[0], h[1][0], h[1][1])
+            books.add_note(h[0], h[1][0], h[1][1], h[3])
             if h[2] is not None:
                 books.update_header(h[0], h[2])
 
         books.apply_sent_amount_format(self.should_apply_sent_formats())
 
-        # when writing files directly there's no URI length limit, so notes don't need to be split.
-        max_size = -1 if self.write_to_file else self.max_file_size
-        for note in books.make_sendable_notes(max_size, self.copy_header):
+        if self.group_by_chapter:
+            # one note per book, highlights grouped under chapter headings with a clickable table of
+            # contents. never split (the in-note links need the whole book in a single file).
+            notes = books.make_grouped_notes(self.toc_title)
+        else:
+            # when writing files directly there's no URI length limit, so notes don't need to be split.
+            max_size = -1 if self.write_to_file else self.max_file_size
+            notes = books.make_sendable_notes(max_size, self.copy_header)
+
+        for note in notes:
             self.deliver(note[0], note[1])
             if not self.write_to_file:
                 # give obsidian a moment between URIs; sometimes not all are received otherwise.

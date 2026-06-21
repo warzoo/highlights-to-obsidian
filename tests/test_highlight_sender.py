@@ -15,7 +15,7 @@ from calibre_plugins.highlights_to_obsidian.exceptions import H2OConfigError
 
 
 def make_highlight(uuid="u1", timestamp="2022-09-10T20:32:08.820Z", text="hello",
-                   notes=None, book_id=1, spine_index=0, start_cfi="/4/2/2:0"):
+                   notes=None, book_id=1, spine_index=0, start_cfi="/4/2/2:0", toc=None):
     annot = {
         "type": "highlight",
         "timestamp": timestamp,
@@ -26,6 +26,8 @@ def make_highlight(uuid="u1", timestamp="2022-09-10T20:32:08.820Z", text="hello"
     }
     if notes is not None:
         annot["notes"] = notes
+    if toc is not None:
+        annot["toc_family_titles"] = toc
     return {"book_id": book_id, "format": "EPUB", "annotation": annot}
 
 
@@ -78,6 +80,20 @@ class TestChapterTitle(unittest.TestCase):
 
     def test_slashes_replaced(self):
         self.assertEqual(self.dict_for(["Part", "1/2 Intro"])["chaptertitle"], "1-2 Intro")
+
+    def test_topchapter_uses_first_level(self):
+        d = self.dict_for(["Part I", "Chapter 1", "Section A"])
+        self.assertEqual(d["topchapter"], "Part I")  # first-level, vs Section A for chaptertitle
+
+    def test_topchapter_single_level_toc(self):
+        self.assertEqual(self.dict_for(["Chapter 1"])["topchapter"], "Chapter 1")
+
+    def test_topchapter_empty_when_missing(self):
+        self.assertEqual(self.dict_for(None)["topchapter"], "")
+        self.assertEqual(self.dict_for([])["topchapter"], "")
+
+    def test_topchapter_slashes_replaced(self):
+        self.assertEqual(self.dict_for(["A/B Part", "Sub"])["topchapter"], "A-B Part")
 
 
 class TestHighlightFormatAndColor(unittest.TestCase):
@@ -199,7 +215,105 @@ class TestBookList(unittest.TestCase):
         bl = BookList()
         bl.add_note("T", "n2", 2)
         bl.add_note("T", "n1", 1)
-        self.assertEqual(bl["T"].notes, [["n1", 1], ["n2", 2]])
+        # notes carry an optional third element (the highlight's first-level chapter), None here
+        self.assertEqual(bl["T"].notes, [["n1", 1, None], ["n2", 2, None]])
+
+    def test_add_note_records_chapter(self):
+        bl = BookList()
+        bl.add_note("T", "n1", 1, chapter="Chapter 1")
+        self.assertEqual(bl["T"].notes, [["n1", 1, "Chapter 1"]])
+
+
+class TestChapterGrouping(unittest.TestCase):
+    def test_groups_under_headings_with_toc(self):
+        b = BookData("Book", header="H\n", notes=[
+            ["a\n", 1, "Chapter 1"],
+            ["b\n", 2, "Chapter 1"],
+            ["c\n", 3, "Chapter 2"],
+        ])
+        title, body = b.make_grouped_note("## Contents")
+        self.assertEqual(title, "Book")
+        self.assertEqual(
+            body,
+            "H\n## Contents\n- [[#Chapter 1]]\n- [[#Chapter 2]]\n\n"
+            "## Chapter 1\na\nb\n## Chapter 2\nc\n")
+
+    def test_chapters_ordered_by_first_appearance(self):
+        # notes are kept sorted by sort_key, so chapter order follows the sort (e.g. reading order)
+        b = BookData("Book", header="", notes=[
+            ["second\n", 2, "Later"],
+            ["first\n", 1, "Earlier"],
+        ])
+        _, body = b.make_grouped_note("## Contents")
+        self.assertLess(body.index("[[#Earlier]]"), body.index("[[#Later]]"))
+        self.assertLess(body.index("## Earlier"), body.index("## Later"))
+
+    def test_no_toc_info_renders_like_plain_note(self):
+        b = BookData("Book", header="H\n", notes=[["a\n", 1, None], ["b\n", 2, ""]])
+        _, body = b.make_grouped_note("## Contents")
+        self.assertEqual(body, "H\na\nb\n")  # no headings, no contents list
+
+    def test_heading_and_link_are_link_safe(self):
+        # characters that break an Obsidian [[#heading]] link are stripped consistently from both
+        b = BookData("Book", header="", notes=[["x\n", 1, "Ch [1] #intro"]])
+        _, body = b.make_grouped_note("## Contents")
+        self.assertIn("## Ch 1 intro\n", body)
+        self.assertIn("- [[#Ch 1 intro]]\n", body)
+
+    def test_empty_toc_title_omits_link_list_but_keeps_headings(self):
+        b = BookData("Book", header="", notes=[["a\n", 1, "C1"]])
+        _, body = b.make_grouped_note("")
+        self.assertNotIn("[[#", body)
+        self.assertIn("## C1\n", body)
+
+
+class TestGroupedSend(unittest.TestCase):
+    """end-to-end: chapter grouping writes one note per book with a clickable table of contents."""
+
+    def sender(self, vault):
+        s = HighlightSender()
+        s.set_title_format("{title}")
+        s.set_body_format("{blockquote}\n\n")
+        s.set_no_notes_format("{blockquote}\n\n")
+        s.set_header_format("")
+        s.set_book_titles_authors({1: {"title": "MyBook", "authors": "Me"}})
+        s.set_write_to_file(True)
+        s.set_vault_path(vault)
+        s.set_sort_key("location")
+        s.set_group_by_chapter(True)
+        s.set_toc_title("## Contents")
+        return s
+
+    def read(self, d):
+        with open(os.path.join(d, "MyBook.md"), encoding="utf-8") as f:
+            return f.read()
+
+    def test_groups_with_toc_and_headings(self):
+        with tempfile.TemporaryDirectory() as d:
+            s = self.sender(d)
+            s.set_annotations_list([
+                make_highlight(uuid="u1", text="hl one", spine_index=0, toc=["Chapter 1"]),
+                make_highlight(uuid="u2", text="hl two", spine_index=1, toc=["Chapter 2"]),
+            ])
+            self.assertEqual(s.send(), 2)
+            content = self.read(d)
+            for expected in ("## Contents", "- [[#Chapter 1]]", "- [[#Chapter 2]]",
+                             "## Chapter 1", "## Chapter 2", "> hl one", "> hl two"):
+                self.assertIn(expected, content)
+            # the table of contents comes before the chapter sections it links to
+            self.assertLess(content.index("- [[#Chapter 1]]"), content.index("## Chapter 1"))
+            # chapters appear in reading order (location/spine): Chapter 1 before Chapter 2
+            self.assertLess(content.index("## Chapter 1"), content.index("## Chapter 2"))
+
+    def test_grouping_takes_precedence_over_merge_mode(self):
+        with tempfile.TemporaryDirectory() as d:
+            s = self.sender(d)
+            s.set_merge_notes(True)  # grouping should win: no %%h2o%% markers, real headings instead
+            s.set_annotations_list([make_highlight(uuid="u1", text="hl", spine_index=0, toc=["Chapter 1"])])
+            s.send()
+            content = self.read(d)
+            self.assertIn("## Chapter 1", content)
+            self.assertNotIn("%%h2o", content)
 
 
 class TestSortKey(unittest.TestCase):

@@ -66,6 +66,8 @@ def send_highlights(parent, db, condition=lambda x: True, update_send_time=True,
         _sender.set_vault_path(prefs["vault_path"])
         _sender.set_write_to_file(prefs["write_to_file"])
         _sender.set_merge_notes(prefs["merge_notes"])
+        _sender.set_group_by_chapter(prefs["group_by_chapter"])
+        _sender.set_toc_title(prefs["chapter_toc_title"])
         _sender.set_title_format(prefs["title_format"])
         _sender.set_body_format(prefs["body_format"])
         _sender.set_no_notes_format(prefs["no_notes_format"])
