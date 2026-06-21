@@ -286,7 +286,9 @@ class OtherConfigDialog(QDialog):
         self.l.addSpacing(self.spacing)
 
         # obsidian vault name
-        self.vault_label = QLabel('<b>Obsidian vault name:</b>', self)
+        self.vault_label = QLabel(
+            '<b>Obsidian vault name</b> (the vault name shown in Obsidian, e.g. "My Vault"; '
+            'used only when NOT writing directly to files — not a folder path):', self)
         self.l.addWidget(self.vault_label)
 
         self.vault_input = QLineEdit(self)
@@ -304,7 +306,9 @@ class OtherConfigDialog(QDialog):
         self.write_to_file_checkbox.setChecked(prefs['write_to_file'])
         self.l.addWidget(self.write_to_file_checkbox)
 
-        self.vault_path_label = QLabel("<b>Vault folder path</b> (required when writing directly to files):", self)
+        self.vault_path_label = QLabel(
+            "<b>Vault folder path</b> (the full folder path to your vault, e.g. "
+            "/Users/you/Documents/MyVault; this is NOT the 'Obsidian vault name' above):", self)
         self.l.addWidget(self.vault_path_label)
         self.vault_path_input = QLineEdit(self)
         self.vault_path_input.setText(prefs['vault_path'])

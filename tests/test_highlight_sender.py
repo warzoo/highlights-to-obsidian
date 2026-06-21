@@ -260,6 +260,13 @@ class TestSendToFile(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             s.send()
 
+    def test_empty_vault_path_raises_with_field_hint(self):
+        s = self.build_sender("", [make_highlight()])
+        with self.assertRaises(RuntimeError) as ctx:
+            s.send()
+        # the message should point at the right field, not the vault name
+        self.assertIn("Vault folder path", str(ctx.exception))
+
 
 class TestMergeSend(unittest.TestCase):
     def hl(self, uuid, text, spine, cfi):

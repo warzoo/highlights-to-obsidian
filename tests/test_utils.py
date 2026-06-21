@@ -58,6 +58,11 @@ class TestFileWriting(unittest.TestCase):
         p = note_path("/vault", "Books/Sub/My Note")
         self.assertEqual(p, os.path.join("/vault", "Books", "Sub", "My Note") + ".md")
 
+    def test_note_path_strips_component_whitespace(self):
+        # "Folder /Note " must not create a trailing-space folder distinct from "Folder"
+        self.assertEqual(note_path("/vault", "Folder /Note "),
+                         os.path.join("/vault", "Folder", "Note") + ".md")
+
     def test_write_creates_subfolders_and_appends(self):
         with tempfile.TemporaryDirectory() as d:
             path = write_note_to_file(d, "Books/Note", "hello", append=True)

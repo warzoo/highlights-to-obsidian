@@ -805,6 +805,24 @@ class HighlightSender:
 
         return formatted[0], (formatted[1], self.format_sort_key(dat)), header
 
+    def _require_vault_dir(self) -> None:
+        """when writing to files, make sure the vault folder path is set and exists; otherwise raise a
+        clear error that distinguishes the 'Vault folder path' field from the 'Obsidian vault name'."""
+        if not self.write_to_file:
+            return
+        if not self.vault_path.strip():
+            raise RuntimeError(
+                "Can't write highlights to files: the 'Vault folder path' is empty.\n\n"
+                "In the config's Other Options, set 'Vault folder path' to the full path of your vault "
+                "folder, e.g. /Users/you/Documents/MyVault. This is a different field from the 'Obsidian "
+                "vault name' (which is only used when NOT writing directly to files).")
+        if not os.path.isdir(self.vault_path):
+            raise RuntimeError(
+                f"Can't write highlights to files: the vault folder '{self.vault_path}' doesn't exist.\n\n"
+                f"Check 'Vault folder path' in the config's Other Options (it should be the full folder "
+                f"path, e.g. /Users/you/Documents/MyVault), or turn off 'write highlights directly to "
+                f"vault files'.")
+
     def deliver(self, note_file: str, note_content: str, append: bool = True) -> None:
         """delivers a single note, either by writing it directly into the vault folder (reliable, no
         length limits, doesn't need Obsidian open) or via the obsidian:// URI.
@@ -836,11 +854,7 @@ class HighlightSender:
         :param book_columns: iterable of (book_id, column_content) pairs.
         :return: number of notes sent.
         """
-        if self.write_to_file and not os.path.isdir(self.vault_path):
-            raise RuntimeError(
-                f"Can't write highlights to files: the vault folder '{self.vault_path}' doesn't exist. "
-                f"Set a valid vault folder path in the Highlights to Obsidian config, or turn off "
-                f"'write highlights directly to vault files'.")
+        self._require_vault_dir()
 
         self.sent_highlights = {}  # custom-column mode has no per-highlight uuids
         count = 0
@@ -861,6 +875,7 @@ class HighlightSender:
         its book's note in sorted position and preserving the note's existing content and edits.
 
         the {totalsent}/{booksent}/{highlightsent} placeholders aren't applied in this mode."""
+        self._require_vault_dir()
         self.sent_highlights = {}
         notes = {}  # title -> {"header": str, "blocks": [block, ...]}
 
@@ -887,11 +902,7 @@ class HighlightSender:
         """
         condition takes a highlight's json object and returns true if that highlight should be sent to obsidian.
         """
-        if self.write_to_file and not os.path.isdir(self.vault_path):
-            raise RuntimeError(
-                f"Can't write highlights to files: the vault folder '{self.vault_path}' doesn't exist. "
-                f"Set a valid vault folder path in the Highlights to Obsidian config, or turn off "
-                f"'write highlights directly to vault files'.")
+        self._require_vault_dir()
 
         highlights = filter(lambda x: self.is_valid_highlight(x, condition), self.annotations_list)
 

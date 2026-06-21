@@ -113,8 +113,13 @@ def note_path(vault_path: str, note_file: str) -> str:
     """builds the absolute .md path for a note inside the vault.
 
     note_file may contain '/' to indicate subfolders, the same convention obsidian note titles use.
+
+    each folder/file component is stripped of surrounding whitespace, so a stray space (e.g. a title
+    template like "Folder /{title}") doesn't create a separate, identical-looking folder with a
+    trailing space -- which the filesystem treats as distinct from one without.
     """
-    parts = [p for p in note_file.split("/") if p != ""]
+    parts = [p.strip() for p in note_file.split("/")]
+    parts = [p for p in parts if p != ""]
     return os.path.join(vault_path, *parts) + ".md"
 
 
