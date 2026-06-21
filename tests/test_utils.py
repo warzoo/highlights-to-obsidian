@@ -12,7 +12,7 @@ from calibre_plugins.highlights_to_obsidian.utils import (
     parse_send_time, parse_highlight_time, annotation_user, is_unsent_or_edited,
     note_path, write_note_to_file, native_open, parse_color_labels, parse_color_filter,
     yaml_safe, format_with, encode_sort_value, make_block, parse_note, merge_note, read_note_file,
-    process_conditional_blocks, obsidian_block_id,
+    process_conditional_blocks, obsidian_block_id, vault_name_looks_like_path,
     SEND_TIME_FORMAT, CALIBRE_TIME_FORMAT)
 
 
@@ -225,6 +225,30 @@ class TestNativeOpen(unittest.TestCase):
         method, calls = self.capture("linux")
         self.assertEqual(method, "xdg-open")
         self.assertEqual(calls, [("run", ["xdg-open", "obsidian://new?x=1"])])
+
+
+class TestVaultNameLooksLikePath(unittest.TestCase):
+    def test_windows_backslash_path(self):
+        self.assertEqual(
+            vault_name_looks_like_path(r"D:\NUESTROS DOCUMENTOS\Bobeda OBSIDIAN\Mi boveda"),
+            "Mi boveda")
+
+    def test_forward_slash_path(self):
+        self.assertEqual(vault_name_looks_like_path("/Users/me/Documents/My Vault"), "My Vault")
+
+    def test_trailing_slash_ignored(self):
+        self.assertEqual(vault_name_looks_like_path("C:/Docs/My Vault/"), "My Vault")
+
+    def test_drive_colon_alone_triggers(self):
+        # a bare "C:" is path-like even without a separator
+        self.assertEqual(vault_name_looks_like_path("C:My Vault"), "C:My Vault")
+
+    def test_plain_name_returns_none(self):
+        self.assertIsNone(vault_name_looks_like_path("My Vault"))
+
+    def test_empty_returns_none(self):
+        self.assertIsNone(vault_name_looks_like_path(""))
+        self.assertIsNone(vault_name_looks_like_path("   "))
 
 
 if __name__ == "__main__":
