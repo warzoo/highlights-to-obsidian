@@ -100,3 +100,9 @@ To make a value safe to use inside Obsidian's YAML frontmatter (for example, a b
 This plugin is loosely based on the [Obsidian Clipper](https://github.com/jplattel/obsidian-clipper) Chrome extension.
 
 The file `h2o-index.txt` is for the [plugin index page](https://www.mobileread.com/forums/showthread.php?t=118764) on the calibre forum.
+
+## Acknowledgements
+
+This project is a fork of [Highlights to Obsidian](https://github.com/jm289765/highlights-to-obsidian) by jm289765 (MIT licensed), which is itself loosely based on the [Obsidian Clipper](https://github.com/jplattel/obsidian-clipper) Chrome extension.
+
+The `{if_notes}` conditional blocks, the `{blockid}` placeholder, the categorized error handling, and the multi-user (`{user}`/`{usertype}`) options were inspired by [gmcheck's fork](https://github.com/gmcheck/highlights-to-obsidian) (v1.5.1).
