@@ -3,7 +3,7 @@
 
 from calibre.customize import InterfaceActionBase
 
-_version = (1, 8, 1)
+_version = (1, 9, 0)
 version = ".".join([str(x) for x in _version])
 
 
