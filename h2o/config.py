@@ -1,7 +1,8 @@
 import time
 
 from qt.core import (QWidget, QVBoxLayout, QLabel, QLineEdit, QPlainTextEdit,
-                     QPushButton, QDialog, QDialogButtonBox, QCheckBox)
+                     QPushButton, QDialog, QDialogButtonBox, QCheckBox, QScrollArea,
+                     QFrame)
 from calibre.gui2 import warning_dialog
 from calibre.utils.config import JSONConfig
 from calibre_plugins.highlights_to_obsidian.utils import (parse_send_time, vault_name_looks_like_path,
@@ -65,6 +66,34 @@ prefs.defaults['template_file'] = ""  # vault-relative template file used as eac
 
 
 
+def _hline():
+    """A thin horizontal separator. Replaces the old rows of '=' characters, which had
+    no spaces to break on and so forced the config dialogs to be very wide."""
+    line = QFrame()
+    line.setFrameShape(QFrame.Shape.HLine)
+    line.setFrameShadow(QFrame.Shadow.Sunken)
+    return line
+
+
+def _scrollable(dialog):
+    """Put a dialog's body inside a scroll area so the window can be freely resized
+    (and made smaller than its content) without the long descriptions or the OK/Cancel
+    buttons getting cut off. Returns (body_layout, outer_layout): add the body widgets
+    to body_layout (as before) and the button box to outer_layout."""
+    body_layout = QVBoxLayout()
+    body = QWidget()
+    body.setLayout(body_layout)
+
+    scroll = QScrollArea()
+    scroll.setWidgetResizable(True)
+    scroll.setWidget(body)
+
+    outer_layout = QVBoxLayout()
+    outer_layout.addWidget(scroll)
+    dialog.setLayout(outer_layout)
+    return body_layout, outer_layout
+
+
 class ConfigWidget(QWidget):
 
     def __init__(self):
@@ -108,15 +137,14 @@ class ConfigWidget(QWidget):
 class FormattingDialog(QDialog):
     def __init__(self):
         QDialog.__init__(self)
-        self.l = QVBoxLayout()
-        self.setLayout(self.l)
-        self.linebreak = "=" * 80
+        self.l, self._outer = _scrollable(self)
         self.spacing = 20  # pixels
+
+        self.setWindowTitle("Highlights to Obsidian: Formatting Options")
 
         self.title_label = QLabel("<b>Highlights to Obsidian Formatting Options</b>")
         self.l.addWidget(self.title_label)
-        self.title_linebreak = QLabel(self.linebreak)
-        self.l.addWidget(self.title_linebreak)
+        self.l.addWidget(_hline())
 
         # note formatting info
         format_info = "<b>The following formatting options are available.</b> " + \
@@ -126,13 +154,13 @@ class FormattingDialog(QDialog):
                       "Wrap part of the body in {if_notes}...{end_if_notes} to include it only for " + \
                       "highlights that have notes. Use ^{blockid} to add an Obsidian block id."
         self.note_format_label = QLabel(format_info, self)
+        self.note_format_label.setWordWrap(True)
         self.l.addWidget(self.note_format_label)
 
         self.note_format_list_label = None
         self.make_format_info_label()
 
-        self.info_linebreak = QLabel(self.linebreak)
-        self.l.addWidget(self.info_linebreak)
+        self.l.addWidget(_hline())
 
         self.l.addSpacing(self.spacing)
 
@@ -249,6 +277,7 @@ class FormattingDialog(QDialog):
         self.color_labels_label = QLabel(
             "<b>Highlight color labels</b> (optional): map a color to text for the {colorlabel} option, "
             "one per line, e.g. \"yellow = Important\".", self)
+        self.color_labels_label.setWordWrap(True)
         self.l.addWidget(self.color_labels_label)
 
         self.color_labels_input = QPlainTextEdit(self)
@@ -260,12 +289,15 @@ class FormattingDialog(QDialog):
 
         self.l.addSpacing(self.spacing)
 
-        # ok and cancel buttons
+        # ok and cancel buttons (kept outside the scroll area so they stay visible)
         self.buttons = QDialogButtonBox()
         self.buttons.setStandardButtons(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         self.buttons.accepted.connect(self.ok_button)
         self.buttons.rejected.connect(self.cancel_button)
-        self.l.addWidget(self.buttons)
+        self._outer.addWidget(self.buttons)
+
+        # sensible starting size; the dialog stays freely resizable
+        self.resize(720, 640)
 
     def make_format_info_label(self):
 
@@ -299,14 +331,17 @@ class FormattingDialog(QDialog):
 
         one_str = "<br/>".join(strs)
         self.note_format_list_label = QLabel(one_str, self)
+        self.note_format_list_label.setWordWrap(True)
         self.l.addWidget(self.note_format_list_label)
 
         local_note = QLabel("All times use UTC by default. To use local time instead, add 'local' " +
                             "to the beginning: {localdatetime}, {localnow}, etc.")
+        local_note.setWordWrap(True)
         self.l.addWidget(local_note)
 
         time_note = QLabel("Note that all times, except 'now' times, are the time the highlight was made, not the " +
                            "current time.")
+        time_note.setWordWrap(True)
         self.l.addWidget(time_note)
 
     def save_settings(self):
@@ -342,17 +377,14 @@ class FormattingDialog(QDialog):
 class OtherConfigDialog(QDialog):
     def __init__(self):
         QDialog.__init__(self)
-        self.l = QVBoxLayout()
-        self.setLayout(self.l)
-        self.linebreak = "=" * 50
+        self.l, self._outer = _scrollable(self)
         self.spacing = 20  # pixels
 
         self.setWindowTitle("Highlights to Obsidian: Other Configuration Options")
 
         self.title_label = QLabel("<b>Highlights to Obsidian Other Options</b>")
         self.l.addWidget(self.title_label)
-        self.title_linebreak = QLabel(self.linebreak)
-        self.l.addWidget(self.title_linebreak)
+        self.l.addWidget(_hline())
 
         self.l.addSpacing(self.spacing)
 
@@ -360,6 +392,7 @@ class OtherConfigDialog(QDialog):
         self.vault_label = QLabel(
             '<b>Obsidian vault name</b> (the vault name shown in Obsidian, e.g. "My Vault"; '
             'used only when NOT writing directly to files — not a folder path):', self)
+        self.vault_label.setWordWrap(True)
         self.l.addWidget(self.vault_label)
 
         self.vault_input = QLineEdit(self)
@@ -371,15 +404,19 @@ class OtherConfigDialog(QDialog):
         self.l.addSpacing(self.spacing)
 
         # output method: write files directly vs. obsidian:// URI
-        self.write_to_file_checkbox = QCheckBox(
-            "Write highlights directly to vault files (more reliable: doesn't need Obsidian open, "
-            "no URI length limit, ignores max note size)")
+        self.write_to_file_checkbox = QCheckBox("Write highlights directly to vault files")
         self.write_to_file_checkbox.setChecked(prefs['write_to_file'])
         self.l.addWidget(self.write_to_file_checkbox)
+        self.write_to_file_label = QLabel(
+            "More reliable: doesn't need Obsidian open, has no URI length limit, and ignores the "
+            "max note size.", self)
+        self.write_to_file_label.setWordWrap(True)
+        self.l.addWidget(self.write_to_file_label)
 
         self.vault_path_label = QLabel(
             "<b>Vault folder path</b> (the full folder path to your vault, e.g. "
             "/Users/you/Documents/MyVault; this is NOT the 'Obsidian vault name' above):", self)
+        self.vault_path_label.setWordWrap(True)
         self.l.addWidget(self.vault_path_label)
         self.vault_path_input = QLineEdit(self)
         self.vault_path_input.setText(prefs['vault_path'])
@@ -387,11 +424,14 @@ class OtherConfigDialog(QDialog):
         self.l.addWidget(self.vault_path_input)
         self.vault_path_label.setBuddy(self.vault_path_input)
 
-        self.merge_notes_checkbox = QCheckBox(
-            "Keep notes sorted and preserve your edits: insert new highlights in position instead of "
-            "appending (only when writing to files; adds small hidden %%h2o%% markers to track position)")
+        self.merge_notes_checkbox = QCheckBox("Keep notes sorted and preserve your edits")
         self.merge_notes_checkbox.setChecked(prefs['merge_notes'])
         self.l.addWidget(self.merge_notes_checkbox)
+        self.merge_notes_label = QLabel(
+            "Inserts new highlights in sorted position instead of appending (only when writing to "
+            "files; adds small hidden %%h2o%% markers to track position).", self)
+        self.merge_notes_label.setWordWrap(True)
+        self.l.addWidget(self.merge_notes_label)
 
         self.l.addSpacing(self.spacing)
 
@@ -399,6 +439,7 @@ class OtherConfigDialog(QDialog):
         self.sort_label = QLabel("<b>Sort key:</b> used to sort highlights that get sent to the same file.<br/>"
                                  + "(Sort keys can be any of H2O's formatting options. No brackets. "
                                  + "For example, <br/>timestamp or location.)", self)
+        self.sort_label.setWordWrap(True)
         self.l.addWidget(self.sort_label)
 
         self.sort_input = QLineEdit(self)
@@ -412,6 +453,7 @@ class OtherConfigDialog(QDialog):
         self.color_filter_label = QLabel(
             "<b>Only send these highlight colors</b> (comma-separated, e.g. \"yellow, blue\"; "
             "leave empty to send all colors):", self)
+        self.color_filter_label.setWordWrap(True)
         self.l.addWidget(self.color_filter_label)
 
         self.color_filter_input = QLineEdit(self)
@@ -424,10 +466,12 @@ class OtherConfigDialog(QDialog):
 
         # time setting
         self.time_label = QLabel('<b>Last time highlights were sent</b> (highlights made after this are considered new)', self)
+        self.time_label.setWordWrap(True)
         self.l.addWidget(self.time_label)
 
         # time format info
         self.time_format_label = QLabel("Time must be formatted \"YYYY-MM-DD hh:mm:ss\"")
+        self.time_format_label.setWordWrap(True)
         self.l.addWidget(self.time_format_label)
 
         self.time_input = QLineEdit(self)
@@ -444,6 +488,7 @@ class OtherConfigDialog(QDialog):
 
         # max note size and related settings
         self.max_size_label = QLabel("<b>Maximum note size</b> (errors can happen when notes are too long):")
+        self.max_size_label.setWordWrap(True)
         self.l.addWidget(self.max_size_label)
 
         self.max_size_input = QLineEdit()
@@ -475,6 +520,7 @@ class OtherConfigDialog(QDialog):
 
         # input for sleep time between highlights
         self.sleep_label = QLabel('<b>Time to wait</b> between sending files (in seconds):', self)
+        self.sleep_label.setWordWrap(True)
         self.l.addWidget(self.sleep_label)
 
         self.sleep_time_input = QLineEdit()
@@ -485,16 +531,20 @@ class OtherConfigDialog(QDialog):
         self.l.addSpacing(self.spacing)
 
         # send every user's annotations, or just the single user selected below
-        self.all_users_checkbox = QCheckBox(
-            "Send highlights from ALL users (by default, only your own — the single user selected "
-            "below — are sent; use the {user} option to label whose is whose)")
+        self.all_users_checkbox = QCheckBox("Send highlights from ALL users")
         self.all_users_checkbox.setChecked(prefs['send_all_users'])
         self.l.addWidget(self.all_users_checkbox)
+        self.all_users_label = QLabel(
+            "By default, only your own — the single user selected below — are sent; use the {user} "
+            "option to label whose is whose.", self)
+        self.all_users_label.setWordWrap(True)
+        self.l.addWidget(self.all_users_label)
 
         self.l.addSpacing(self.spacing)
 
         # input for web user's name
         self.web_label = QLabel('<b>Web user\'s username</b> (if sending web user\'s highlights):', self)
+        self.web_label.setWordWrap(True)
         self.l.addWidget(self.web_label)
 
         self.web_user_name_input = QLineEdit()
@@ -511,13 +561,17 @@ class OtherConfigDialog(QDialog):
 
         # read annotations from a custom column (e.g. one populated by the Annotations plugin) instead
         # of calibre's built-in annotations. sends the column's content as the note body, one per book.
-        self.use_column_checkbox = QCheckBox(
-            "Read annotations from a custom column instead of calibre's built-in annotations "
-            "(sends the column's content as the note body, one note per book)")
+        self.use_column_checkbox = QCheckBox("Read annotations from a custom column")
         self.use_column_checkbox.setChecked(prefs['use_custom_column'])
         self.l.addWidget(self.use_column_checkbox)
+        self.use_column_label = QLabel(
+            "Instead of calibre's built-in annotations; sends the column's content as the note body, "
+            "one note per book.", self)
+        self.use_column_label.setWordWrap(True)
+        self.l.addWidget(self.use_column_label)
 
         self.custom_column_label = QLabel("<b>Custom column lookup name</b> (e.g. #annotations):", self)
+        self.custom_column_label.setWordWrap(True)
         self.l.addWidget(self.custom_column_label)
         self.custom_column_input = QLineEdit(self)
         self.custom_column_input.setText(prefs['custom_column'])
@@ -529,8 +583,7 @@ class OtherConfigDialog(QDialog):
         # by default (unchecked) H2O opens the obsidian:// link through calibre's own open_url, which
         # sanitizes calibre's bundled environment first; checking this uses the raw native command.
         self.native_open_checkbox = QCheckBox(
-            "Advanced: open Obsidian with the raw OS command (xdg-open / open / startfile) instead of "
-            "Calibre's URL handler")
+            "Advanced: open Obsidian with the raw OS command (xdg-open / open / startfile)")
         self.native_open_checkbox.setChecked(prefs['use_xdg_open'])
         self.l.addWidget(self.native_open_checkbox)
 
@@ -547,12 +600,15 @@ class OtherConfigDialog(QDialog):
 
         self.l.addSpacing(self.spacing)
 
-        # ok and cancel buttons
+        # ok and cancel buttons (kept outside the scroll area so they stay visible)
         self.buttons = QDialogButtonBox()
         self.buttons.setStandardButtons(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         self.buttons.accepted.connect(self.ok_button)
         self.buttons.rejected.connect(self.cancel_button)
-        self.l.addWidget(self.buttons)
+        self._outer.addWidget(self.buttons)
+
+        # sensible starting size; the dialog stays freely resizable
+        self.resize(720, 680)
 
     def set_time_now(self):
         prefs["last_send_time"] = time.strftime(SEND_TIME_FORMAT, time.gmtime())
